@@ -3,21 +3,25 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 import google.generativeai as genai
+
 # ==========================================
-# 0. CONFIGURACIÓN DE SEGURIDAD (LOGIN)
+# 0. CONFIGURACIÓN DE USUARIOS Y SEGURIDAD
 # ==========================================
 USUARIOS_AUTORIZADOS = {
     "admin": "weppa2026",
-    "roselys": "weppapop"
+    "roselys": "weppapop",
+    "carlos": "pop2026",
+    "kelli": "weppa2026"
 }
 
-st.set_page_config(page_title="Control POP Weppa", page_icon="🔒", layout="wide")
+st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wide")
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
 if not st.session_state.autenticado:
     st.title("🔒 Acceso Privado — Control POP Weppa")
+    st.markdown("Por favor, ingresa tus credenciales de acceso para gestionar el inventario.")
     with st.form("login_form"):
         usuario = st.text_input("Usuario")
         clave = st.text_input("Contraseña", type="password")
@@ -113,12 +117,13 @@ init_db()
 # 2. BARRA LATERAL E INTERFAZ PRINCIPAL
 # ==========================================
 with st.sidebar:
-    st.write(f"👤 Sesión: **{st.session_state.usuario_actual}**")
+    st.write(f"👤 Sesión activa: **{st.session_state.usuario_actual}**")
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()
     st.divider()
-    api_key = st.text_input("🔑 Gemini API Key:", type="password")
+    st.subheader("🤖 Configuración IA")
+    api_key = st.text_input("🔑 Gemini API Key:", type="password", help="Introduce tu clave de API de Google Gemini para usar el asistente.")
 
 st.title("📦 Control de Material POP — Weppa")
 
@@ -137,13 +142,14 @@ with tabs[0]:
         col2.metric("Total Unidades Disponibles", int(df['Cantidad'].sum()))
         st.dataframe(df, use_container_width=True)
     else:
-        st.info("El inventario está vacío. Sube un Excel o registra materiales.")
+        st.info("El inventario está vacío. Sube un archivo Excel/CSV o registra materiales manualmente.")
 
 with tabs[1]:
+    st.subheader("Registrar Entrada o Salida")
     with st.form("form_pop"):
         col_a, col_b = st.columns(2)
         with col_a:
-            producto = st.text_input("Nombre del Material", placeholder="Ej: Franelas, Pop-sockets").strip()
+            producto = st.text_input("Nombre del Material", placeholder="Ej: Franelas, Pop-sockets, Banners").strip()
             categoria = st.selectbox("Categoría", ["Textil", "Papelería", "Accesorios", "Eventos", "Merchandising"])
             cantidad = st.number_input("Cantidad", min_value=1, step=1)
         with col_b:
@@ -153,17 +159,20 @@ with tabs[1]:
         if st.form_submit_button("Guardar Movimiento"):
             if producto:
                 ok, msg = registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion)
-                st.success(msg) if ok else st.error(msg)
-                if ok: st.rerun()
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
             else:
-                st.warning("Escribe el nombre del material.")
+                st.warning("Debes escribir el nombre del material.")
 
 with tabs[2]:
-    st.subheader("Importar o Exportar Inventario")
+    st.subheader("Importar o Exportar Inventario Masivo")
     df_export = obtener_inventario()
     if df_export.empty:
         df_export = pd.DataFrame({
-            "Material": ["Franelas Weppa", "Stickers"],
+            "Material": ["Franelas Weppa", "Stickers Promocionales"],
             "Categoría": ["Textil", "Papelería"],
             "Cantidad": [50, 200],
             "Ubicación": ["Caracas", "Lechería"]
@@ -189,12 +198,14 @@ with tabs[2]:
                     st.success("¡Inventario cargado exitosamente!")
                     st.rerun()
                 else:
-                    st.error("El archivo debe tener las columnas 'Material' y 'Cantidad'.")
+                    st.error("El archivo debe contener obligatoriamente las columnas 'Material' y 'Cantidad'.")
         except Exception as e:
-            st.error(f"Error al leer el archivo: {e}")
+            st.error(f"Error al procesar el archivo: {e}")
 
 with tabs[3]:
-    st.subheader("💬 Asistente Logístico Weppa")
+    st.subheader("💬 Asistente Logístico con IA (Gemini)")
+    st.markdown("Pregúntale al asistente sobre el stock disponible, qué materiales faltan o ideas logísticas para Weppa.")
+    
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
@@ -202,24 +213,29 @@ with tabs[3]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    user_query = st.chat_input("Ej: Haz un resumen del stock o dime qué falta...")
+    user_query = st.chat_input("Ej: ¿Qué material tiene menos stock en el almacén?")
     if user_query:
         if not api_key:
-            st.error("Coloca tu Gemini API Key en el menú lateral izquierdo.")
+            st.error("Por favor, introduce tu Gemini API Key en la barra lateral izquierda para activar el asistente.")
         else:
             st.session_state.chat_history.append({"role": "user", "content": user_query})
             with st.chat_message("user"):
                 st.markdown(user_query)
             
             df_actual = obtener_inventario()
-            datos_contexto = df_actual.to_string(index=False) if not df_actual.empty else "Sin stock disponible."
+            datos_contexto = df_actual.to_string(index=False) if not df_actual.empty else "El inventario actual está vacío."
             
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel('gemini-1.5-flash')
-                res = model.generate_content(f"Eres el asistente logístico de Material POP para Weppa. Responde basándote en este inventario:\n{datos_contexto}\n\nPregunta: {user_query}")
+                prompt_completo = (
+                    "Eres el asistente logístico experto de Material POP para la empresa Weppa. "
+                    f"Utiliza estrictamente los siguientes datos de inventario actual para responder:\n{datos_contexto}\n\n"
+                    f"Pregunta del usuario: {user_query}"
+                )
+                res = model.generate_content(prompt_completo)
                 with st.chat_message("assistant"):
                     st.markdown(res.text)
                 st.session_state.chat_history.append({"role": "assistant", "content": res.text})
             except Exception as err:
-                st.error(f"Error con la API: {err}")
+                st.error(f"Error al conectar con Gemini: {err}")
