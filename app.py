@@ -1,3 +1,8 @@
+import os
+import sqlite3
+import pandas as pd
+import streamlit as st
+import google.generativeai as genai
 # ==========================================
 # 0. CONFIGURACIÓN DE SEGURIDAD (LOGIN)
 # ==========================================
