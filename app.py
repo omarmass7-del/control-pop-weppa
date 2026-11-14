@@ -320,6 +320,3 @@ with tabs[4]:
             st.session_state.chat_history.append({"role": "assistant", "content": res.text})
         except Exception as err:
             st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
-                st.session_state.chat_history.append({"role": "assistant", "content": res.text})
-            except Exception as err:
-                st.error(f"Error al conectar con Gemini: {err}")
