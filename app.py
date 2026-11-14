@@ -5,7 +5,7 @@ import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 0. CONFIGURACIÓN DE ACCESO CORPORATIVO
+# 0. CONFIGURACIÓN DE ACCESO CORPORATIVO Y PÚBLICO
 # ==========================================
 USUARIOS_AUTORIZADOS = {
     "adm": "weppa2026",
@@ -18,24 +18,6 @@ st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wid
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
-
-if not st.session_state.autenticado:
-    st.title("🔒 Acceso Corporativo — Control POP Weppa")
-    st.markdown("Inicia sesión utilizando tu **correo corporativo** (`@weppa.io`) o usuario `adm`.")
-    
-    with st.form("login_form"):
-        usuario = st.text_input("Correo o Usuario").strip().lower()
-        clave = st.text_input("Contraseña", type="password")
-        entrar = st.form_submit_button("Ingresar al Sistema")
-        
-        if entrar:
-            if usuario in USUARIOS_AUTORIZADOS and USUARIOS_AUTORIZADOS[usuario] == clave:
-                st.session_state.autenticado = True
-                st.session_state.usuario_actual = usuario
-                st.rerun()
-            else:
-                st.error("❌ Credenciales incorrectas. Verifica tu usuario y contraseña.")
-    st.stop()
 
 # ==========================================
 # 1. BASE DE DATOS LOCAL (SQLite)
@@ -63,11 +45,86 @@ def init_db():
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Tabla para las solicitudes de formularios externos
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS solicitudes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                solicitante TEXT NOT NULL,
+                correo TEXT NOT NULL,
+                material TEXT NOT NULL,
+                cantidad INTEGER NOT NULL,
+                estatus TEXT NOT NULL,
+                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
+init_db()
+
+# ==========================================
+# 2. PANTALLA DE LOGIN O FORMULARIO PÚBLICO
+# ==========================================
+modo_vista = st.sidebar.radio("Navegación", ["🔐 Iniciar Sesión (Equipo)", "📋 Solicitar Material POP (Externo)"])
+
+if modo_vista == "📋 Solicitar Material POP (Externo)":
+    st.title("📋 Formulario de Solicitud de Material POP — Weppa")
+    st.markdown("Completa los datos para solicitar material. Una vez enviado, nuestro equipo procesará tu requerimiento.")
+    
+    with st.form("form_solicitud_externa"):
+        nombre_solicitante = st.text_input("Nombre y Apellido").strip()
+        correo_solicitante = st.text_input("Correo Electrónico").strip()
+        material_solicitado = st.text_input("Material POP / Descripción requerida").strip()
+        cantidad_solicitada = st.number_input("Cantidad", min_value=1, step=1)
+        
+        enviar_form = st.form_submit_button("Enviar Solicitud")
+        if enviar_form:
+            if nombre_solicitante and correo_solicitante and material_solicitado:
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute(
+                        "INSERT INTO solicitudes (solicitante, correo, material, cantidad, estatus) VALUES (?, ?, ?, ?, ?)",
+                        (nombre_solicitante, correo_solicitante, material_solicitado, cantidad_solicitada, "Recibido")
+                    )
+                    conn.commit()
+                st.success("¡Solicitud enviada con éxito! Tu estatus actual es: **Recibido**. Nos pondremos en contacto pronto.")
+            else:
+                st.warning("Por favor completa todos los campos obligatorios.")
+    st.stop()
+
+# Si no está autenticado para el panel interno
+if not st.session_state.autenticado:
+    st.title("🔒 Acceso Corporativo — Control POP Weppa")
+    st.markdown("Inicia sesión utilizando tu **correo corporativo** (`@weppa.io`) o usuario `adm`.")
+    
+    with st.form("login_form"):
+        usuario = st.text_input("Correo o Usuario").strip().lower()
+        clave = st.text_input("Contraseña", type="password")
+        entrar = st.form_submit_button("Ingresar al Sistema")
+        
+        if entrar:
+            if usuario in USUARIOS_AUTORIZADOS and USUARIOS_AUTORIZADOS[usuario] == clave:
+                st.session_state.autenticado = True
+                st.session_state.usuario_actual = usuario
+                st.rerun()
+            else:
+                st.error("❌ Credenciales incorrectas. Verifica tu usuario y contraseña.")
+    st.stop()
+
+# ==========================================
+# 3. FUNCIONES DE GESTIÓN INTERNA
+# ==========================================
 def obtener_inventario():
     with sqlite3.connect(DB_PATH) as conn:
         df = pd.read_sql_query("SELECT id, producto AS 'Material', categoria AS 'Categoría', cantidad AS 'Cantidad', ubicacion AS 'Ubicación' FROM inventario", conn)
     return df
+
+def obtener_solicitudes():
+    with sqlite3.connect(DB_PATH) as conn:
+        df = pd.read_sql_query("SELECT id, solicitante AS 'Solicitante', correo AS 'Correo', material AS 'Material', cantidad AS 'Cantidad', estatus AS 'Estatus', fecha AS 'Fecha' FROM solicitudes ORDER BY id DESC", conn)
+    return df
+
+def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("UPDATE solicitudes SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
+        conn.commit()
 
 def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
     with sqlite3.connect(DB_PATH) as conn:
@@ -113,24 +170,20 @@ def cargar_masivo(df_subido, modo):
                                (prod, cat, cant, ubi))
         conn.commit()
 
-init_db()
-
 # ==========================================
-# 2. BARRA LATERAL E INTERFAZ PRINCIPAL
+# 4. INTERFAZ DE ADMINISTRACIÓN / EQUIPO
 # ==========================================
 with st.sidebar:
     st.write(f"👤 Conectado como:\n**{st.session_state.usuario_actual}**")
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()
-    st.divider()
-    st.subheader("🤖 Configuración IA")
-    api_key = st.text_input("🔑 Gemini API Key:", type="password", help="Introduce tu clave de API de Google Gemini.")
 
-st.title("📦 Control de Material POP — Weppa")
+st.title("📦 Control de Material POP — Weppa (Panel Interno)")
 
 tabs = st.tabs([
     "📊 Inventario Actual", 
+    "📥 Solicitudes Externas",
     "➕ Registro Individual", 
     "📂 Cargar / Descargar Excel", 
     "🤖 Asistente IA Weppa"
@@ -147,6 +200,33 @@ with tabs[0]:
         st.info("El inventario está vacío. Sube un archivo Excel/CSV o registra materiales.")
 
 with tabs[1]:
+    st.subheader("📥 Gestión de Solicitudes Recibidas")
+    st.markdown("Aquí puedes revisar las solicitudes que envían los usuarios externos y actualizar su estatus.")
+    
+    df_sol = obtener_solicitudes()
+    if not df_sol.empty:
+        for index, row in df_sol.iterrows():
+            with st.expander(f"Solicitud #{row['id']} — {row['Solicitante']} ({row['Material']})"):
+                st.write(f"📧 **Correo:** {row['Correo']}")
+                st.write(f"📦 **Material:** {row['Material']} (Cantidad: {row['Cantidad']})")
+                st.write(f"📅 **Fecha:** {row['Fecha']}")
+                st.write(f"📌 **Estatus Actual:** `{row['Estatus']}`")
+                
+                nuevo_estatus = st.selectbox(
+                    "Cambiar estatus", 
+                    ["Recibido", "En espera pendiente", "Enviado"], 
+                    index=["Recibido", "En espera pendiente", "Enviado"].index(row['Estatus']) if row['Estatus'] in ["Recibido", "En espera pendiente", "Enviado"] else 0,
+                    key=f"estatus_{row['id']}"
+                )
+                
+                if st.button(f"Actualizar Estatus #{row['id']}", key=f"btn_{row['id']}"):
+                    actualizar_estatus_solicitud(row['id'], nuevo_estatus)
+                    st.success(f"¡Estatus actualizado a '{nuevo_estatus}' con éxito!")
+                    st.rerun()
+    else:
+        st.info("No hay solicitudes externas registradas todavía.")
+
+with tabs[2]:
     st.subheader("Registrar Entrada o Salida")
     with st.form("form_pop"):
         col_a, col_b = st.columns(2)
@@ -169,7 +249,7 @@ with tabs[1]:
             else:
                 st.warning("Debes escribir el nombre del material.")
 
-with tabs[2]:
+with tabs[3]:
     st.subheader("Importar o Exportar Inventario Masivo")
     df_export = obtener_inventario()
     if df_export.empty:
@@ -204,7 +284,7 @@ with tabs[2]:
         except Exception as e:
             st.error(f"Error al procesar el archivo: {e}")
 
-with tabs[3]:
+with tabs[4]:
     st.subheader("💬 Asistente Logístico con IA (Gemini)")
     st.markdown("Pregúntale al asistente sobre el stock disponible, qué materiales faltan o ideas logísticas para Weppa.")
     
@@ -217,9 +297,10 @@ with tabs[3]:
 
     user_query = st.chat_input("Ej: ¿Qué material tiene menos stock?")
     if user_query:
-        if not api_key:
-            st.error("Por favor, introduce tu Gemini API Key en la barra lateral izquierda.")
-        else:
+        try:
+            gemini_key = st.secrets["GEMINI_API_KEY"]
+            genai.configure(api_key=gemini_key)
+            
             st.session_state.chat_history.append({"role": "user", "content": user_query})
             with st.chat_message("user"):
                 st.markdown(user_query)
@@ -227,17 +308,18 @@ with tabs[3]:
             df_actual = obtener_inventario()
             datos_contexto = df_actual.to_string(index=False) if not df_actual.empty else "El inventario actual está vacío."
             
-            try:
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                prompt_completo = (
-                    "Eres el asistente logístico experto de Material POP para Weppa. "
-                    f"Utiliza estrictamente los siguientes datos de inventario:\n{datos_contexto}\n\n"
-                    f"Pregunta del usuario: {user_query}"
-                )
-                res = model.generate_content(prompt_completo)
-                with st.chat_message("assistant"):
-                    st.markdown(res.text)
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            prompt_completo = (
+                "Eres el asistente logístico experto de Material POP para Weppa. "
+                f"Utiliza estrictamente los siguientes datos de inventario:\n{datos_contexto}\n\n"
+                f"Pregunta del usuario: {user_query}"
+            )
+            res = model.generate_content(prompt_completo)
+            with st.chat_message("assistant"):
+                st.markdown(res.text)
+            st.session_state.chat_history.append({"role": "assistant", "content": res.text})
+        except Exception as err:
+            st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
                 st.session_state.chat_history.append({"role": "assistant", "content": res.text})
             except Exception as err:
                 st.error(f"Error al conectar con Gemini: {err}")
