@@ -140,7 +140,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         st.session_state.solicitud_enviada_ok = None
 
     if st.session_state.solicitud_enviada_ok:
-        st.success(f"✅ **¡Solicitud enviada con éxito!**\n\n**Código de solicitud:** `{st.session_state.solicitud_enviada_ok}`\n\n**Estatus:** Enviado (Recibido por el equipo de Weppa).")
+        st.success(f"✅ **¡Solicitud enviada con éxito!**\n\n**Código de solicitud:** `{st.session_state.solicitud_enviada_ok}`\n\n**Estatus inicial:** Recibido (En revisión por el equipo de Weppa).")
         if st.button("Hacer otra solicitud"):
             st.session_state.solicitud_enviada_ok = None
             st.rerun()
@@ -315,7 +315,39 @@ def obtener_solicitudes():
 
 def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
+        cursor = conn.cursor()
+        
+        # Consultar estatus previo y los materiales de esta solicitud
+        cursor.execute("SELECT estatus, materiales_json FROM solicitudes_v2 WHERE id = ?", (sol_id,))
+        row = cursor.fetchone()
+        if not row:
+            return
+        estatus_anterior, materiales_json = row[0], row[1]
+
+        # Si el nuevo estatus es "Enviado" y ANTES no estaba en "Enviado", restamos el inventario automáticamente
+        if nuevo_estatus == "Enviado" and estatus_anterior != "Enviado":
+            try:
+                mats_list = json.loads(materiales_json)
+                for item in mats_list:
+                    prod_nombre = item["Material"]
+                    cant_solicitada = int(item["Cantidad"])
+
+                    # Descontar del stock actual
+                    cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod_nombre,))
+                    inv_row = cursor.fetchone()
+                    if inv_row:
+                        stock_actual = inv_row[0]
+                        nuevo_stock = max(0, stock_actual - cant_solicitada)
+                        cursor.execute("UPDATE inventario SET cantidad = ? WHERE producto = ?", (nuevo_stock, prod_nombre))
+                    
+                    # Registrar salida en el historial
+                    cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
+                                   (prod_nombre, "Salida Automática (Solicitud)", cant_solicitada, st.session_state.usuario_actual))
+            except Exception as e:
+                st.error(f"Error descontando inventario: {e}")
+
+        # Actualizar el estatus en la base de datos
+        cursor.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
         conn.commit()
 
 def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
@@ -435,7 +467,8 @@ with tabs[0]:
                 st.divider()
                 col_est1, col_est2 = st.columns([2, 1])
                 with col_est1:
-                    opciones_est = ["Recibido", "En espera pendiente", "Enviado"]
+                    # Estatus actualizados y ordenados lógicamente
+                    opciones_est = ["Recibido", "Aprobado", "Enviado"]
                     idx_actual = opciones_est.index(row["estatus"]) if row["estatus"] in opciones_est else 0
                     nuevo_est = st.selectbox("Actualizar estatus de la solicitud", opciones_est, index=idx_actual, key=f"sel_{row['id']}")
                 with col_est2:
@@ -443,7 +476,10 @@ with tabs[0]:
                     st.write("")
                     if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
                         actualizar_estatus_solicitud(row["id"], nuevo_est)
-                        st.success(f"Estatus cambiado a '{nuevo_est}'")
+                        if nuevo_est == "Enviado":
+                            st.success(f"Estatus 'Enviado': ¡Inventario descontado automáticamente!")
+                        else:
+                            st.success(f"Estatus cambiado a '{nuevo_est}'")
                         st.rerun()
     else:
         st.info("No hay solicitudes registradas todavía.")
