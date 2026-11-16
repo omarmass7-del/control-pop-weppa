@@ -553,12 +553,20 @@ with tabs[4]:
                 f"Pregunta del usuario: {user_query}"
             )
 
+            modelo_elegido = "gemini-3.8-flash"
             try:
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                res = model.generate_content(prompt_completo)
+                modelos_activos = [
+                    m.name.replace("models/", "")
+                    for m in genai.list_models()
+                    if "generateContent" in m.supported_generation_methods and "flash" in m.name.lower()
+                ]
+                if modelos_activos:
+                    modelo_elegido = modelos_activos[0]
             except Exception:
-                model = genai.GenerativeModel("gemini-2.0-flash")
-                res = model.generate_content(prompt_completo)
+                pass
+
+            model = genai.GenerativeModel(modelo_elegido)
+            res = model.generate_content(prompt_completo)
 
             with st.chat_message("assistant"):
                 st.markdown(res.text)
