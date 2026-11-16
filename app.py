@@ -25,9 +25,6 @@ BANNER_PATH = "banner_weppa_custom.png"
 BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 
-# Clave de API de Gemini proporcionada
-GEMINI_API_KEY_DIRECTA = "AQ.Ab8RN6Jc3YxUuxGl0Reyp0_LvoSJRzPSVvvhMOSahq3JcJdQYg"
-
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     25, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500,
@@ -700,32 +697,35 @@ with tabs[5]:
 
     user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están en proceso?")
     if user_query:
-        try:
-            genai.configure(api_key=GEMINI_API_KEY_DIRECTA)
+        if "GEMINI_API_KEY" not in st.secrets:
+            st.error("⚠️ Configure su 'GEMINI_API_KEY' en los Secretos de Streamlit Cloud (como lo tienes en la imagen).")
+        else:
+            try:
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-            st.session_state.chat_history_gemini.append({"role": "user", "content": user_query})
-            with st.chat_message("user"):
-                st.markdown(user_query)
+                st.session_state.chat_history_gemini.append({"role": "user", "content": user_query})
+                with st.chat_message("user"):
+                    st.markdown(user_query)
 
-            df_actual = obtener_inventario()
-            datos_inv = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
+                df_actual = obtener_inventario()
+                datos_inv = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
 
-            df_sol_ia = obtener_solicitudes()
-            datos_sol = df_sol_ia[["codigo_solicitud", "solicitado_por", "tipo_solicitud", "cantidad_total", "estatus"]].to_string(index=False) if not df_sol_ia.empty else "Sin solicitudes."
+                df_sol_ia = obtener_solicitudes()
+                datos_sol = df_sol_ia[["codigo_solicitud", "solicitado_por", "tipo_solicitud", "cantidad_total", "estatus"]].to_string(index=False) if not df_sol_ia.empty else "Sin solicitudes."
 
-            prompt_sistema = (
-                "Eres el asistente logístico experto de Material POP para Weppa. "
-                f"Utiliza estrictamente los siguientes datos actuales:\n\nINVENTARIO:\n{datos_inv}\n\n"
-                f"SOLICITUDES RECIBIDAS:\n{datos_sol}\n\nPregunta del usuario: {user_query}"
-            )
+                prompt_sistema = (
+                    "Eres el asistente logístico experto de Material POP para Weppa. "
+                    f"Utiliza estrictamente los siguientes datos actuales:\n\nINVENTARIO:\n{datos_inv}\n\n"
+                    f"SOLICITUDES RECIBIDAS:\n{datos_sol}\n\nPregunta del usuario: {user_query}"
+                )
 
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content(prompt_sistema)
-            respuesta_ia = response.text
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content(prompt_sistema)
+                respuesta_ia = response.text
 
-            with st.chat_message("assistant"):
-                st.markdown(respuesta_ia)
-            st.session_state.chat_history_gemini.append({"role": "assistant", "content": respuesta_ia})
+                with st.chat_message("assistant"):
+                    st.markdown(respuesta_ia)
+                st.session_state.chat_history_gemini.append({"role": "assistant", "content": respuesta_ia})
 
-        except Exception as err:
-            st.error(f"⚠️ Error al conectar con Google Gemini: {err}")
+            except Exception as err:
+                st.error(f"⚠️ Error al conectar con Google Gemini: {err}")
