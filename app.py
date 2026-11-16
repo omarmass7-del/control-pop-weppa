@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pandas as pd
 import streamlit as st
-from openai import OpenAI
+import google.generativeai as genai  # 👈 Importamos Google GenAI
 
 # ==========================================
 # 0. CONFIGURACIÓN DE ACCESO Y ESTILOS
@@ -148,7 +148,6 @@ def enviar_correo_notificacion(asunto, cuerpo):
             msg['From'] = remitente
             msg['Subject'] = asunto
             msg['To'] = ", ".join(EMAILS_EQUIPO)
-            
             msg.attach(MIMEText(cuerpo, 'plain', 'utf-8'))
 
             with smtplib.SMTP(servidor_smtp, puerto_smtp) as server:
@@ -575,7 +574,7 @@ tabs = st.tabs([
     "📊 Inventario Actual",
     "➕ Registro Individual",
     "📂 Cargar / Descargar Excel",
-    "🤖 Asistente IA ChatGPT"
+    "🤖 Asistente IA Gemini"
 ])
 
 with tabs[0]:
@@ -686,12 +685,51 @@ with tabs[4]:
             st.rerun()
 
 with tabs[5]:
-    st.subheader("💬 Asistente IA")
-    user_query = st.chat_input("Pregunta algo sobre el inventario...")
+    st.subheader("💬 Asistente IA (Google Gemini)")
+    st.markdown("Consulte al asistente inteligente sobre el stock actual o el estado de las solicitudes de forma gratuita.")
+
+    if "chat_history_gemini" not in st.session_state:
+        st.session_state.chat_history_gemini = []
+
+    for msg in st.session_state.chat_history_gemini:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están en proceso?")
     if user_query:
-        if "OPENAI_API_KEY" not in st.secrets:
-            st.error("Configure OPENAI_API_KEY en Streamlit Secrets.")
+        if "GEMINI_API_KEY" not in st.secrets:
+            st.error("⚠️ Configure su 'GEMINI_API_KEY' en los Secretos de Streamlit Cloud.")
         else:
-            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+            try:
+                # Configurar la API Key de Gemini
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+                st.session_state.chat_history_gemini.append({"role": "user", "content": user_query})
+                with st.chat_message("user"):
+                    st.markdown(user_query)
+
+                df_actual = obtener_inventario()
+                datos_inv = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
+
+                df_sol_ia = obtener_solicitudes()
+                datos_sol = df_sol_ia[["codigo_solicitud", "solicitado_por", "tipo_solicitud", "cantidad_total", "estatus"]].to_string(index=False) if not df_sol_ia.empty else "Sin solicitudes."
+
+                prompt_sistema = (
+                    "Eres el asistente logístico experto de Material POP para Weppa. "
+                    f"Utiliza estrictamente los siguientes datos actuales:\n\nINVENTARIO:\n{datos_inv}\n\n"
+                    f"SOLICITUDES RECIBIDAS:\n{datos_sol}\n\nPregunta del usuario: {user_query}"
+                )
+
+                # Usar el modelo gratuito gemini-1.5-flash
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content(prompt_sistema)
+                respuesta_ia = response.text
+
+                with st.chat_message("assistant"):
+                    st.markdown(respuesta_ia)
+                st.session_state.chat_history_gemini.append({"role": "assistant", "content": respuesta_ia})
+
+            except Exception as err:
+                st.error(f"⚠️ Error al conectar con Google Gemini: {err}")
             response = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": user_query}])
             st.markdown(response.choices[0].message.content)
