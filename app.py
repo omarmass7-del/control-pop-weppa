@@ -2,6 +2,9 @@ import os
 import json
 import sqlite3
 from datetime import date, datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 import pandas as pd
 import streamlit as st
 from openai import OpenAI
@@ -15,6 +18,8 @@ USUARIOS_AUTORIZADOS = {
     "omar@weppa.io": "omar2026",
     "maribel@weppa.io": "maribel2026"
 }
+
+EMAILS_EQUIPO = ["angela@weppa.io", "omar@weppa.io", "maribel@weppa.io"]
 
 BANNER_PATH = "banner_weppa_custom.png"
 BACKGROUND_PATH = "background_weppa_custom.png"
@@ -127,6 +132,31 @@ def init_db():
         """)
 
 init_db()
+
+# ==========================================
+# FUNCIÓN DE NOTIFICACIÓN POR CORREO
+# ==========================================
+def enviar_correo_notificacion(asunto, cuerpo):
+    if "SMTP_USER" in st.secrets and "SMTP_PASSWORD" in st.secrets:
+        try:
+            remitente = st.secrets["SMTP_USER"]
+            password = st.secrets["SMTP_PASSWORD"]
+            servidor_smtp = st.secrets.get("SMTP_SERVER", "smtp.gmail.com")
+            puerto_smtp = int(st.secrets.get("SMTP_PORT", 587))
+
+            msg = MIMEMultipart()
+            msg['From'] = remitente
+            msg['Subject'] = asunto
+            msg['To'] = ", ".join(EMAILS_EQUIPO)
+            
+            msg.attach(MIMEText(cuerpo, 'plain', 'utf-8'))
+
+            with smtplib.SMTP(servidor_smtp, puerto_smtp) as server:
+                server.starttls()
+                server.login(remitente, password)
+                server.sendmail(remitente, EMAILS_EQUIPO, msg.as_string())
+        except Exception as e:
+            print(f"Error enviando correo: {e}")
 
 # ==========================================
 # ESTILOS CSS AVANZADOS
@@ -376,6 +406,10 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
                 ))
                 conn.commit()
 
+            asunto_mail = f"📥 Nueva Solicitud POP Recibida: {codigo_sol} ({solicitado_por})"
+            cuerpo_mail = f"Se ha registrado una nueva solicitud de material POP en el sistema.\n\nCódigo: {codigo_sol}\nSolicitante: {solicitado_por}\nDestino: {estado_destino}, {ciudad_destino} ({oficina_zoom})\nTotal piezas: {cantidad_total}\nEstatus inicial: Recepción de Documento"
+            enviar_correo_notificacion(asunto_mail, cuerpo_mail)
+
             st.session_state.solicitud_enviada_ok = codigo_sol
             st.rerun()
     st.stop()
@@ -411,13 +445,12 @@ def obtener_solicitudes():
 def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT estatus, materiales_json FROM solicitudes_v2 WHERE id = ?", (sol_id,))
+        cursor.execute("SELECT codigo_solicitud, solicitado_por, estatus, materiales_json FROM solicitudes_v2 WHERE id = ?", (sol_id,))
         row = cursor.fetchone()
         if not row:
             return
-        estatus_anterior, materiales_json = row[0], row[1]
+        codigo_sol, solicitado_por, estatus_anterior, materiales_json = row[0], row[1], row[2], row[3]
         
-        # Descontar inventario automáticamente solo si pasa a "Enviado" por primera vez
         if nuevo_estatus == "Enviado" and estatus_anterior != "Enviado":
             try:
                 mats_list = json.loads(materiales_json)
@@ -437,6 +470,10 @@ def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
                 
         cursor.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
         conn.commit()
+
+    asunto_mail = f"🔄 Actualización de Estatus POP: {codigo_sol} ➔ {nuevo_estatus}"
+    cuerpo_mail = f"La solicitud {codigo_sol} de {solicitado_por} ha cambiado de estatus.\n\nNuevo Estatus: {nuevo_estatus}\nModificado por: {st.session_state.usuario_actual}"
+    enviar_correo_notificacion(asunto_mail, cuerpo_mail)
 
 def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
     with sqlite3.connect(DB_PATH) as conn:
@@ -557,15 +594,17 @@ with tabs[0]:
                 except Exception:
                     pass
                 
-                # Opciones de estatus actualizadas
                 fases_estatus = ["Recepción de Documento", "Proceso", "Enviado"]
                 idx_actual = fases_estatus.index(estatus_actual) if estatus_actual in fases_estatus else 0
-                nuevo_est = st.selectbox("Actualizar Estatus (El Adm tiene control total)", fases_estatus, index=idx_actual, key=f"sel_{row['id']}")
                 
-                if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
-                    actualizar_estatus_solicitud(row["id"], nuevo_est)
-                    st.success(f"✅ Estatus actualizado a '{nuevo_est}'.")
-                    st.rerun()
+                if st.session_state.usuario_actual == "adm":
+                    nuevo_est = st.selectbox("Actualizar Estatus (Control exclusivo de Admin)", fases_estatus, index=idx_actual, key=f"sel_{row['id']}")
+                    if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
+                        actualizar_estatus_solicitud(row["id"], nuevo_est)
+                        st.success(f"✅ Estatus actualizado a '{nuevo_est}' y notificación enviada.")
+                        st.rerun()
+                else:
+                    st.info(f"Estatus actual: **{estatus_actual}** (Solo el administrador 'adm' puede modificar las fases).")
     else:
         st.info("No hay solicitudes registradas.")
 
@@ -575,8 +614,6 @@ with tabs[1]:
     
     df_tablero = obtener_solicitudes()
     if not df_tablero.empty:
-        col_f1, col_f2, col_f3 = st.columns(3)
-        
         fases = ["Recepción de Documento", "Proceso", "Enviado"]
         colores_fase = {"Recepción de Documento": "📥", "Proceso": "⚙️", "Enviado": "🚚"}
         
@@ -595,13 +632,15 @@ with tabs[1]:
                         st.write(f"🏢 **Oficina:** {r['oficina_zoom']}")
                         st.write(f"📦 **Piezas:** {r['cantidad_total']}")
                         
-                        # Acceso rápido de modificación para el adm o usuarios autorizados
-                        nuevo_cambio = st.selectbox("Cambiar fase", fases, index=fases.index(r['estatus']), key=f"board_{r['id']}")
-                        if nuevo_cambio != r['estatus']:
-                            if st.button("Actualizar fase", key=f"b_upd_{r['id']}"):
-                                actualizar_estatus_solicitud(r['id'], nuevo_cambio)
-                                st.success("¡Estatus actualizado!")
-                                st.rerun()
+                        if st.session_state.usuario_actual == "adm":
+                            nuevo_cambio = st.selectbox("Cambiar fase", fases, index=fases.index(r['estatus']), key=f"board_{r['id']}")
+                            if nuevo_cambio != r['estatus']:
+                                if st.button("Actualizar fase", key=f"b_upd_{r['id']}"):
+                                    actualizar_estatus_solicitud(r['id'], nuevo_cambio)
+                                    st.success("¡Estatus actualizado y notificación enviada!")
+                                    st.rerun()
+                        else:
+                            st.caption(f"Fase: {r['estatus']}")
                         st.markdown("---")
     else:
         st.info("No hay solicitudes para mostrar en el tablero.")
