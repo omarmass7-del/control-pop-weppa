@@ -7,7 +7,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pandas as pd
 import streamlit as st
-import google.generativeai as genai
 
 # ==========================================
 # 0. CONFIGURACIÓN DE ACCESO Y ESTILOS
@@ -158,7 +157,7 @@ def enviar_correo_notificacion(asunto, cuerpo):
             print(f"Error enviando correo: {e}")
 
 # ==========================================
-# ESTILOS CSS AVANZADOS (Respetando tus archivos personalizados)
+# ESTILOS CSS AVANZADOS (Respetando tus archivos)
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -517,22 +516,19 @@ def cargar_masivo(df_subido, modo):
 with st.sidebar:
     st.write(f"👤 Conectado como:\n**{st.session_state.usuario_actual}**")
     st.divider()
-    st.markdown("### 🛠️ Configuración y Panel")
-    st.caption("Los archivos personalizados (Banner, Fondo y Excel Zoom) se cargan y leen automáticamente desde el repositorio.")
-    st.divider()
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()
 
 st.title("📦 Control de Material POP — Weppa (Panel Interno)")
 
+# 5 pestañas limpias sin la IA
 tabs = st.tabs([
     "📥 Solicitudes Externas",
     "📊 Panel de Estatus (Recepción/Proceso/Envío)",
     "📊 Inventario Actual",
     "➕ Registro Individual",
-    "📂 Cargar / Descargar Excel",
-    "🤖 Asistente IA Gemini"
+    "📂 Cargar / Descargar Excel"
 ])
 
 with tabs[0]:
@@ -554,6 +550,7 @@ with tabs[0]:
                 fases_estatus = ["Recepción de Documento", "Proceso", "Enviado"]
                 idx_actual = fases_estatus.index(estatus_actual) if estatus_actual in fases_estatus else 0
                 
+                # Restricción exclusiva para el administrador 'adm'
                 if st.session_state.usuario_actual == "adm":
                     nuevo_est = st.selectbox("Actualizar Estatus (Control exclusivo de Admin)", fases_estatus, index=idx_actual, key=f"sel_{row['id']}")
                     if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
@@ -589,6 +586,7 @@ with tabs[1]:
                         st.write(f"🏢 **Oficina:** {r['oficina_zoom']}")
                         st.write(f"📦 **Piezas:** {r['cantidad_total']}")
                         
+                        # Restricción exclusiva en el tablero para el administrador 'adm'
                         if st.session_state.usuario_actual == "adm":
                             nuevo_cambio = st.selectbox("Cambiar fase", fases, index=fases.index(r['estatus']), key=f"board_{r['id']}")
                             if nuevo_cambio != r['estatus']:
@@ -641,50 +639,3 @@ with tabs[4]:
             cargar_masivo(df_subido, modo_carga)
             st.success("Cargado con éxito.")
             st.rerun()
-
-with tabs[5]:
-    st.subheader("💬 Asistente IA (Google Gemini)")
-    st.markdown("Consulte al asistente inteligente sobre el stock actual o el estado de las solicitudes de forma gratuita.")
-
-    if "chat_history_gemini" not in st.session_state:
-        st.session_state.chat_history_gemini = []
-
-    for msg in st.session_state.chat_history_gemini:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están en proceso?")
-    if user_query:
-        if "GEMINI_API_KEY" not in st.secrets:
-            st.error("⚠️ Configure su 'GEMINI_API_KEY' en los Secretos de Streamlit Cloud.")
-        else:
-            try:
-                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-                st.session_state.chat_history_gemini.append({"role": "user", "content": user_query})
-                with st.chat_message("user"):
-                    st.markdown(user_query)
-
-                df_actual = obtener_inventario()
-                datos_inv = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
-
-                df_sol_ia = obtener_solicitudes()
-                datos_sol = df_sol_ia[["codigo_solicitud", "solicitado_por", "tipo_solicitud", "cantidad_total", "estatus"]].to_string(index=False) if not df_sol_ia.empty else "Sin solicitudes."
-
-                prompt_sistema = (
-                    "Eres el asistente logístico experto de Material POP para Weppa. "
-                    f"Utiliza estrictamente los siguientes datos actuales:\n\nINVENTARIO:\n{datos_inv}\n\n"
-                    f"SOLICITUDES RECIBIDAS:\n{datos_sol}\n\nPregunta del usuario: {user_query}"
-                )
-
-                # Utiliza el modelo estándar universal y estable con la librería clásica
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                response = model.generate_content(prompt_sistema)
-                respuesta_ia = response.text
-
-                with st.chat_message("assistant"):
-                    st.markdown(respuesta_ia)
-                st.session_state.chat_history_gemini.append({"role": "assistant", "content": respuesta_ia})
-
-            except Exception as err:
-                st.error(f"⚠️ Error al conectar con Google Gemini: {err}")
