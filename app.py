@@ -18,6 +18,7 @@ USUARIOS_AUTORIZADOS = {
 
 BANNER_PATH = "banner_weppa_custom.png"
 BACKGROUND_PATH = "background_weppa_custom.png"
+ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -34,40 +35,62 @@ ESTADOS_VENEZUELA = [
     "Sucre", "Táchira", "Trujillo", "Yaracuy", "Zulia"
 ]
 
-# Principales oficinas oficiales de Zoom integradas en el buscador dinámico
-SUCURSALES_ZOOM_OFICIALES = [
-    "Zoom - Caracas (Av. Victoria)",
-    "Zoom - Caracas (Altamira Sur)",
-    "Zoom - Caracas (La Candelaria / Centro)",
-    "Zoom - Caracas (Chacao)",
-    "Zoom - Caracas (El Marqués)",
-    "Zoom - Caracas (Catia)",
-    "Zoom - Miranda (Guarenas / 27 de Febrero)",
-    "Zoom - Miranda (Los Teques)",
-    "Zoom - Miranda (Guatire)",
-    "Zoom - La Guaira (Maiquetía)",
-    "Zoom - Carabobo (Valencia / C.C. San Andrésito)",
-    "Zoom - Carabobo (Naguanagua)",
-    "Zoom - Aragua (Maracay / Torre Sindoni)",
-    "Zoom - Aragua (Cagua - Calle Comercio)",
-    "Zoom - Anzoátegui (Puerto La Cruz - Hotel Rasil)",
-    "Zoom - Anzoátegui (Barcelona - Amana)",
-    "Zoom - Anzoátegui (Lechería - C.C. Mercado La Isla)",
-    "Zoom - Anzoátegui (Anaco Centro)",
-    "Zoom - Anzoátegui (El Tigre - C.C. Alba)",
-    "Zoom - Zulia (Maracaibo - 18 de Octubre)",
-    "Zoom - Zulia (Maracaibo - Amparo)",
-    "Zoom - Zulia (Maracaibo - Bella Vista)",
-    "Zoom - Lara (Barquisimeto - Aeropuerto Jacinto Lara)",
-    "Zoom - Táchira (San Cristóbal - 7ma Avenida)",
-    "Zoom - Mérida (Santa Elena de Arenales)",
-    "Zoom - Bolívar (Puerto Ordaz - C.C. Plaza Atlántico)",
-    "Zoom - Bolívar (Ciudad Bolívar - Hangar Distribuidora)",
-    "Zoom - Nueva Esparta (Porlamar - Villa Rosa)",
-    "Zoom - Portuguesa (Acarigua - C.C. Páez)",
-    "Zoom - Apure (Achaguas)",
-    "Otra agencia Zoom / Destino Nacional a convenir"
-]
+# Función para obtener la lista de oficinas Zoom (dinámica desde el Excel del adm o lista base)
+def obtener_sucursales_zoom():
+    if os.path.exists(ZOOM_EXCEL_PATH):
+        try:
+            df_zoom = pd.read_excel(ZOOM_EXCEL_PATH)
+            # Buscar la columna que contenga las agencias
+            columna_agencia = None
+            for col in df_zoom.columns:
+                if any(k in col.lower() for k in ["agencia", "oficina", "sucursal", "zoom", "nombre"]):
+                    columna_agencia = col
+                    break
+            if columna_agencia is None and not df_zoom.empty:
+                columna_agencia = df_zoom.columns[0]
+            
+            if columna_agencia:
+                lista_cargada = df_zoom[columna_agencia].dropna().astype(str).tolist()
+                if lista_cargada:
+                    return ["Seleccione oficina Zoom..."] + lista_cargada
+        except Exception:
+            pass
+
+    # Lista por defecto si el adm no ha subido un Excel personalizado
+    return [
+        "Seleccione oficina Zoom...",
+        "Zoom - Caracas (Av. Victoria)",
+        "Zoom - Caracas (Altamira Sur)",
+        "Zoom - Caracas (La Candelaria / Centro)",
+        "Zoom - Caracas (Chacao)",
+        "Zoom - Caracas (El Marqués)",
+        "Zoom - Caracas (Catia)",
+        "Zoom - Miranda (Guarenas / 27 de Febrero)",
+        "Zoom - Miranda (Los Teques)",
+        "Zoom - Miranda (Guatire)",
+        "Zoom - La Guaira (Maiquetía)",
+        "Zoom - Carabobo (Valencia / C.C. San Andrésito)",
+        "Zoom - Carabobo (Naguanagua)",
+        "Zoom - Aragua (Maracay / Torre Sindoni)",
+        "Zoom - Aragua (Cagua - Calle Comercio)",
+        "Zoom - Anzoátegui (Puerto La Cruz - Hotel Rasil)",
+        "Zoom - Anzoátegui (Barcelona - Amana)",
+        "Zoom - Anzoátegui (Lechería - C.C. Mercado La Isla)",
+        "Zoom - Anzoátegui (Anaco Centro)",
+        "Zoom - Anzoátegui (El Tigre - C.C. Alba)",
+        "Zoom - Zulia (Maracaibo - 18 de Octubre)",
+        "Zoom - Zulia (Maracaibo - Amparo)",
+        "Zoom - Zulia (Maracaibo - Bella Vista)",
+        "Zoom - Lara (Barquisimeto - Aeropuerto Jacinto Lara)",
+        "Zoom - Táchira (San Cristóbal - 7ma Avenida)",
+        "Zoom - Mérida (Santa Elena de Arenales)",
+        "Zoom - Bolívar (Puerto Ordaz - C.C. Plaza Atlántico)",
+        "Zoom - Bolívar (Ciudad Bolívar - Hangar Distribuidora)",
+        "Zoom - Nueva Esparta (Porlamar - Villa Rosa)",
+        "Zoom - Portuguesa (Acarigua - C.C. Páez)",
+        "Zoom - Apure (Achaguas)",
+        "Otra agencia Zoom / Destino Nacional a convenir"
+    ]
 
 PREFIJOS_TELEFONO = ["0412", "0414", "0424", "0416", "0426", "0212", "Otro"]
 
@@ -226,7 +249,7 @@ modo_vista = st.sidebar.radio(
 
 if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.title("📋 Solicitud de Material POP — Weppa")
-    st.markdown("Complete cuidadosamente las secciones del formulario, seleccione la agencia de Zoom oficial integrada y las cantidades requeridas.")
+    st.markdown("Complete cuidadosamente las secciones del formulario, seleccione la agencia de Zoom oficial y las cantidades requeridas.")
 
     if "solicitud_enviada_ok" not in st.session_state:
         st.session_state.solicitud_enviada_ok = None
@@ -275,13 +298,14 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
 
         st.divider()
-        st.subheader("3. Envío por Zoom (Red de Oficinas Oficiales)")
+        st.subheader("3. Envío por Zoom (Red de Oficinas Actualizada)")
         z1, z2, z3 = st.columns(3)
         with z1:
             estado_destino = st.selectbox("Estado de destino", ESTADOS_VENEZUELA)
             ciudad_destino = st.text_input("Ciudad de destino").strip()
-            # Selector integrado con la red oficial de oficinas Zoom
-            oficina_zoom = st.selectbox("Agencia / Oficina Zoom de destino *", SUCURSALES_ZOOM_OFICIALES)
+            # Selector dinámico cargado desde el archivo Excel del administrador
+            lista_oficinas_actual = obtener_sucursales_zoom()
+            oficina_zoom = st.selectbox("Agencia / Oficina Zoom de destino *", lista_oficinas_actual)
         with z2:
             direccion_localidad = st.text_input("Dirección o localidad").strip()
             municipio = st.text_input("Municipio").strip()
@@ -340,6 +364,8 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
 
             if not solicitado_por or not num_sol:
                 st.error("⚠️ Por favor complete los campos obligatorios: 'Solicitado por' y 'Número de contacto'.")
+            elif oficina_zoom == "Seleccione oficina Zoom...":
+                st.error("⚠️ Por favor seleccione una agencia o oficina Zoom válida.")
             elif cantidad_total <= 0:
                 st.error("⚠️ Debe seleccionar al menos 1 material con cantidad mayor a 0.")
             else:
@@ -491,17 +517,16 @@ def cargar_masivo(df_subido, modo):
 with st.sidebar:
     st.write(f"👤 Conectado como:\n**{st.session_state.usuario_actual}**")
     
-    # 🌟 GESTIÓN DE PERSONALIZACIÓN VISUAL (EXCLUSIVO PARA adm) 🌟
+    # 🌟 GESTIÓN DE PERSONALIZACIÓN Y AGENCIAS ZOOM (EXCLUSIVO PARA adm) 🌟
     if st.session_state.usuario_actual == "adm":
         st.divider()
         st.markdown("### 🎨 Personalización Visual")
-        st.markdown("*(Visible para todo el equipo)*")
-
+        
         banner_subido = st.file_uploader("Subir Banner Superior", type=["png", "jpg", "jpeg"])
         if banner_subido is not None:
             with open(BANNER_PATH, "wb") as f:
                 f.write(banner_subido.getbuffer())
-            st.success("¡Banner actualizado con éxito!")
+            st.success("¡Banner actualizado!")
             st.rerun()
 
         if os.path.exists(BANNER_PATH):
@@ -515,13 +540,31 @@ with st.sidebar:
         if bg_subido is not None:
             with open(BACKGROUND_PATH, "wb") as f:
                 f.write(bg_subido.getbuffer())
-            st.success("¡Fondo actualizado con éxito!")
+            st.success("¡Fondo actualizado!")
             st.rerun()
 
         if os.path.exists(BACKGROUND_PATH):
             if st.button("🗑️ Eliminar Fondo"):
                 os.remove(BACKGROUND_PATH)
                 st.success("Fondo eliminado.")
+                st.rerun()
+
+        st.divider()
+        st.markdown("### 📦 Agencias Zoom (Excel)")
+        zoom_subido = st.file_uploader("Actualizar Lista Zoom (.xlsx)", type=["xlsx", "csv"])
+        if zoom_subido is not None:
+            try:
+                df_z = pd.read_csv(zoom_subido) if zoom_subido.name.endswith('.csv') else pd.read_excel(zoom_subido)
+                df_z.to_excel(ZOOM_EXCEL_PATH, index=False)
+                st.success("¡Lista de agencias Zoom actualizada!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error procesando el archivo: {e}")
+
+        if os.path.exists(ZOOM_EXCEL_PATH):
+            if st.button("🔄 Restablecer Lista Zoom Original"):
+                os.remove(ZOOM_EXCEL_PATH)
+                st.success("Lista restablecida.")
                 st.rerun()
 
     st.divider()
