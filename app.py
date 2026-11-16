@@ -326,4 +326,232 @@ def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
 
         if res is None:
             if tipo == "Entrada":
+                cursor.execute("INSERT INTO inventario (producto, categoria, cantidad, ubicacion) VALUES (?, ?, ?, ?)",
+                               (producto, categoria, cantidad, ubicacion))
+            else:
+                return False, "El producto no existe en inventario."
+        else:
+            nueva_cant = res[0] + cantidad if tipo == "Entrada" else res[0] - cantidad
+            if nueva_cant < 0:
+                return False, f"Stock insuficiente. Disponible: {res[0]}."
+            cursor.execute("UPDATE inventario SET cantidad = ?, ubicacion = ? WHERE producto = ?", (nueva_cant, ubicacion, producto))
+
+        cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
+                       (producto, tipo, cantidad, st.session_state.usuario_actual))
+        conn.commit()
+    return True, f"¡{tipo} de {cantidad} unidad(es) de '{producto}' registrada por {st.session_state.usuario_actual}!"
+
+def cargar_masivo(df_subido, modo):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        if modo == "Reemplazar todo el inventario":
+            cursor.execute("DELETE FROM inventario")
+
+        for _, row in df_subido.iterrows():
+            prod = str(row["Material"]).strip()
+            cat = str(row.get("Categoría", "General")).strip()
+            cant = int(row["Cantidad"])
+            ubi = str(row.get("Ubicación", "Almacén Principal")).strip()
+
+            cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod,))
+            existe = cursor.fetchone()
+            if existe and modo == "Sumar al inventario actual":
+                cursor.execute("UPDATE inventario SET cantidad = ? WHERE producto = ?", (existe[0] + cant, prod))
+            else:
+                cursor.execute("INSERT OR REPLACE INTO inventario (producto, categoria, cantidad, ubicacion) VALUES (?, ?, ?, ?)",
+                               (prod, cat, cant, ubi))
+        conn.commit()
+
+# ==========================================
+# 5. PANEL INTERNO DE ADMINISTRACIÓN
+# ==========================================
+with st.sidebar:
+    st.write(f"👤 Conectado como:\n**{st.session_state.usuario_actual}**")
+    if st.button("Cerrar Sesión"):
+        st.session_state.autenticado = False
+        st.rerun()
+
+st.title("📦 Control de Material POP — Weppa (Panel Interno)")
+
+tabs = st.tabs([
+    "📥 Solicitudes Externas",
+    "📊 Inventario Actual",
+    "➕ Registro Individual",
+    "📂 Cargar / Descargar Excel",
+    "🤖 Asistente IA Weppa"
+])
+
+with tabs[0]:
+    st.subheader("📥 Solicitudes de Material POP Recibidas")
+    df_sol = obtener_solicitudes()
+
+    if not df_sol.empty:
+        st.download_button(
+            label="⬇️ Descargar Reporte de Solicitudes (CSV)",
+            data=df_sol.drop(columns=["materiales_json"]).to_csv(index=False).encode("utf-8"),
+            file_name="solicitudes_pop_weppa.csv",
+            mime="text/csv"
+        )
+        st.divider()
+
+        for _, row in df_sol.iterrows():
+            titulo_exp = f"[{row['estatus'].upper()}] {row['codigo_solicitud']} — {row['solicitado_por']} | {row['tipo_solicitud']} ({row['cantidad_total']} piezas)"
+            with st.expander(titulo_exp):
+                col_i1, col_i2, col_i3 = st.columns(3)
+                with col_i1:
+                    st.markdown("**Información General**")
+                    st.write(f"📅 **Fecha solicitud:** {row['fecha_solicitud']}")
+                    st.write(f"📆 **Entrega requerida:** {row['fecha_entrega']}")
+                    st.write(f"👤 **Solicitante:** {row['solicitado_por']} ({row['cargo_departamento']})")
+                    st.write(f"📞 **Contacto:** {row['contacto_solicitante']}")
+                    st.write(f"🏢 **Canal/Área:** {row['canal_area']} | **Prioridad:** {row['prioridad']}")
+                with col_i2:
+                    st.markdown("**Tienda o Actividad**")
+                    st.write(f"🏪 **Tienda:** {row['nombre_tienda']} (Nueva: {row['tienda_nueva']})")
+                    st.write(f"🎪 **Evento:** {row['descripcion_evento']} ({row['fechas_evento']})")
+                    st.write(f"🤝 **Aliado:** {row['aliado_comercial']} | **Promotor:** {row['nombre_promotor']}")
+                    st.write(f"📍 **Zona:** {row['zona_cobertura']} | **Activación:** {row['activacion_asignada']}")
+                    st.write(f"🎯 **Objetivo:** {row['objetivo_solicitud']}")
+                    if row['detalle_adicional']:
+                        st.write(f"📝 **Detalle:** {row['detalle_adicional']}")
+                with col_i3:
+                    st.markdown("**Envío por Zoom**")
+                    st.write(f"🗺️ **Destino:** {row['estado_destino']}, {row['ciudad_destino']}")
+                    st.write(f"📦 **Oficina Zoom:** {row['oficina_zoom']}")
+                    st.write(f"🏠 **Dirección:** {row['direccion_localidad']} ({row['municipio']}, {row['parroquia']})")
+                    st.write(f"🪪 **Retira:** {row['nombre_retiro']} (CI: {row['cedula_retiro']})")
+                    st.write(f"📱 **Tel/Correo:** {row['telefono_retiro']} | {row['correo_retiro']}")
+                    st.write(f"🕒 **Horario/Ref:** {row['horario_retiro']} — {row['referencia_ubicacion']}")
+                    if row['observaciones_entrega']:
+                        st.write(f"🚚 **Obs. entrega:** {row['observaciones_entrega']}")
+
+                st.markdown("**Detalle de Materiales Solicitados**")
+                try:
+                    df_mats = pd.read_json(row["materiales_json"])
+                    st.dataframe(df_mats, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.write("Sin detalle de materiales.")
+
+                st.divider()
+                col_est1, col_est2 = st.columns([2, 1])
+                with col_est1:
+                    opciones_est = ["Recibido", "En espera pendiente", "Enviado"]
+                    idx_actual = opciones_est.index(row["estatus"]) if row["estatus"] in opciones_est else 0
+                    nuevo_est = st.selectbox("Actualizar estatus de la solicitud", opciones_est, index=idx_actual, key=f"sel_{row['id']}")
+                with col_est2:
+                    st.write("")
+                    st.write("")
+                    if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
+                        actualizar_estatus_solicitud(row["id"], nuevo_est)
+                        st.success(f"Estatus cambiado a '{nuevo_est}'")
+                        st.rerun()
+    else:
+        st.info("No hay solicitudes registradas todavía.")
+
+with tabs[1]:
+    df = obtener_inventario()
+    if not df.empty:
+        col1, col2 = st.columns(2)
+        col1.metric("Variedad de Materiales", len(df))
+        col2.metric("Total Unidades Disponibles", int(df['Cantidad'].sum()))
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("El inventario está vacío. Sube un archivo Excel/CSV o registra materiales.")
+
+with tabs[2]:
+    st.subheader("Registrar Entrada o Salida")
+    with st.form("form_pop"):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            producto = st.text_input("Nombre del Material", placeholder="Ej: Stand, Lanyards, Vasos térmicos").strip()
+            categoria = st.selectbox("Categoría", ["Textil", "Papelería", "Accesorios", "Eventos", "Merchandising"])
+            cantidad = st.selectbox("Cantidad", OPCIONES_CANTIDAD[1:])
+        with col_b:
+            tipo = st.radio("Tipo de Operación", ["Entrada", "Salida"])
+            ubicacion = st.text_input("Ubicación / Destino", value="Almacén Principal")
+
+        if st.form_submit_button("Guardar Movimiento"):
+            if producto:
+                ok, msg = registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion)
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+            else:
+                st.warning("Debes escribir el nombre del material.")
+
+with tabs[3]:
+    st.subheader("Importar o Exportar Inventario Masivo")
+    df_export = obtener_inventario()
+    if df_export.empty:
+        df_export = pd.DataFrame({
+            "Material": ["Stand", "Lanyards"],
+            "Categoría": ["Eventos", "Accesorios"],
+            "Cantidad": [10, 200],
+            "Ubicación": ["Caracas", "Lechería"]
+        })
+
+    st.download_button(
+        label="⬇️ Descargar Inventario / Plantilla (CSV)",
+        data=df_export.to_csv(index=False).encode('utf-8'),
+        file_name="inventario_weppa.csv",
+        mime="text/csv"
+    )
+    st.divider()
+    archivo = st.file_uploader("Sube tu archivo de inventario (.xlsx o .csv)", type=["xlsx", "csv"])
+    modo_carga = st.radio("¿Qué hacer con los datos subidos?", ["Sumar al inventario actual", "Reemplazar todo el inventario"])
+
+    if archivo is not None:
+        try:
+            df_subido = pd.read_csv(archivo) if archivo.name.endswith('.csv') else pd.read_excel(archivo)
+            st.dataframe(df_subido.head())
+            if st.button("✅ Confirmar Carga en Base de Datos"):
+                if "Material" in df_subido.columns and "Cantidad" in df_subido.columns:
+                    cargar_masivo(df_subido, modo_carga)
+                    st.success("¡Inventario cargado exitosamente!")
+                    st.rerun()
+                else:
+                    st.error("El archivo debe contener las columnas 'Material' y 'Cantidad'.")
+        except Exception as e:
+            st.error(f"Error al procesar el archivo: {e}")
+
+with tabs[4]:
+    st.subheader("💬 Asistente Logístico con IA (Gemini)")
+    st.markdown("Pregúntale al asistente sobre el stock disponible o las solicitudes recibidas.")
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están pendientes?")
+    if user_query:
+        try:
+            gemini_key = st.secrets["GEMINI_API_KEY"]
+            genai.configure(api_key=gemini_key)
+
+            st.session_state.chat_history.append({"role": "user", "content": user_query})
+            with st.chat_message("user"):
+                st.markdown(user_query)
+
+            df_actual = obtener_inventario()
+            datos_contexto = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
+
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            prompt_completo = (
+                "Eres el asistente logístico experto de Material POP para Weppa. "
+                f"Utiliza estrictamente los siguientes datos de inventario:\n{datos_contexto}\n\n"
+                f"Pregunta del usuario: {user_query}"
+            )
+            res = model.generate_content(prompt_completo)
+            with st.chat_message("assistant"):
+                st.markdown(res.text)
+            st.session_state.chat_history.append({"role": "assistant", "content": res.text})
+        except Exception:
+            st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
+        if res is None:
+            if tipo == "Entrada":
                 cursor.execute("INSERT
