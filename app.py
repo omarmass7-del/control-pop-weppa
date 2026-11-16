@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pandas as pd
 import streamlit as st
-from google import genai  # 👈 Librería oficial actualizada de Google
+from google import genai
 
 # ==========================================
 # 0. CONFIGURACIÓN DE ACCESO Y ESTILOS
@@ -701,7 +701,6 @@ with tabs[5]:
             st.error("⚠️ Configure su 'GEMINI_API_KEY' en los Secretos de Streamlit Cloud.")
         else:
             try:
-                # Inicializar el cliente moderno con la clave de secretos
                 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
                 st.session_state.chat_history_gemini.append({"role": "user", "content": user_query})
@@ -720,9 +719,9 @@ with tabs[5]:
                     f"SOLICITUDES RECIBIDAS:\n{datos_sol}\n\nPregunta del usuario: {user_query}"
                 )
 
-                # Llamada usando el modelo estándar actual con el cliente moderno
+                # Usando el modelo 1.5 con la ruta completa requerida por la API moderna
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="models/gemini-1.5-flash",
                     contents=prompt_sistema,
                 )
                 respuesta_ia = response.text
