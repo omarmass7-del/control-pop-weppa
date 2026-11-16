@@ -194,13 +194,12 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         st.session_state.solicitud_enviada_ok = None
 
     if st.session_state.solicitud_enviada_ok:
-        st.success(f"✅ **¡Solicitud enviada con éxito!**\n\n**Código de solicitud:** `{st.session_state.solicitud_enviada_ok}`\n\n**Estatus actual:** Recibido.")
+        st.success(f"✅ **¡Solicitud enviada con éxito!**\n\n**Código de solicitud:** `{st.session_state.solicitud_enviada_ok}`\n\n**Estatus actual:** Recepción de Documento.")
         if st.button("Hacer otra solicitud"):
             st.session_state.solicitud_enviada_ok = None
             st.rerun()
         st.stop()
 
-    # Callback para autocompletar datos al cambiar la agencia
     def actualizar_datos_agencia():
         agencia_elegida = st.session_state.get("sel_agencia_zoom", "")
         estado_actual = st.session_state.get("sel_estado_destino", "Seleccione un estado...")
@@ -263,7 +262,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.divider()
     st.subheader("3. Envío por Zoom (Autocompletado Automático)")
     
-    # Leer Excel de agencias
     df_zoom_excel = pd.DataFrame()
     if os.path.exists(ZOOM_EXCEL_PATH):
         try:
@@ -374,7 +372,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
                     objetivo_solicitud, detalle_adicional, estado_final, ciudad_destino,
                     oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
                     cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
-                    horario_retiro, observaciones_entrega, cantidad_total, materiales_json, "Recibido"
+                    horario_retiro, observaciones_entrega, cantidad_total, materiales_json, "Recepción de Documento"
                 ))
                 conn.commit()
 
@@ -418,6 +416,8 @@ def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
         if not row:
             return
         estatus_anterior, materiales_json = row[0], row[1]
+        
+        # Descontar inventario automáticamente solo si pasa a "Enviado" por primera vez
         if nuevo_estatus == "Enviado" and estatus_anterior != "Enviado":
             try:
                 mats_list = json.loads(materiales_json)
@@ -434,6 +434,7 @@ def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
                                    (prod_nombre, "Salida Automática (Solicitud Enviada)", cant_solicitada, st.session_state.usuario_actual))
             except Exception as e:
                 st.error(f"Error descontando inventario: {e}")
+                
         cursor.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
         conn.commit()
 
@@ -533,6 +534,7 @@ st.title("📦 Control de Material POP — Weppa (Panel Interno)")
 
 tabs = st.tabs([
     "📥 Solicitudes Externas",
+    "📊 Panel de Estatus (Recepción/Proceso/Envío)",
     "📊 Inventario Actual",
     "➕ Registro Individual",
     "📂 Cargar / Descargar Excel",
@@ -546,62 +548,67 @@ with tabs[0]:
         st.download_button("⬇️ Descargar Reporte (CSV)", data=df_sol.drop(columns=["materiales_json"]).to_csv(index=False).encode("utf-8"), file_name="solicitudes.csv", mime="text/csv")
         st.divider()
         for _, row in df_sol.iterrows():
-            with st.expander(f"[{row['estatus'].upper()}] {row['codigo_solicitud']} — {row['solicitado_por']} | ({row['cantidad_total']} piezas)"):
+            estatus_actual = row['estatus']
+            with st.expander(f"[{estatus_actual}] {row['codigo_solicitud']} — Solicitante: {row['solicitado_por']} | ({row['cantidad_total']} piezas)"):
                 st.write(f"**Destino:** {row['estado_destino']}, {row['ciudad_destino']} — **Oficina:** {row['oficina_zoom']}")
                 st.write(f"**Dirección:** {row['direccion_localidad']} (Mun: {row['municipio']}, Parr: {row['parroquia']})")
                 try:
                     st.dataframe(pd.read_json(row["materiales_json"]), use_container_width=True, hide_index=True)
                 except Exception:
                     pass
-                nuevo_est = st.selectbox("Estatus", ["Recibido", "Aprobado", "Enviado"], index=["Recibido", "Aprobado", "Enviado"].index(row["estatus"]), key=f"sel_{row['id']}")
+                
+                # Opciones de estatus actualizadas
+                fases_estatus = ["Recepción de Documento", "Proceso", "Enviado"]
+                idx_actual = fases_estatus.index(estatus_actual) if estatus_actual in fases_estatus else 0
+                nuevo_est = st.selectbox("Actualizar Estatus (El Adm tiene control total)", fases_estatus, index=idx_actual, key=f"sel_{row['id']}")
+                
                 if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
                     actualizar_estatus_solicitud(row["id"], nuevo_est)
-                    st.success("Estatus actualizado.")
+                    st.success(f"✅ Estatus actualizado a '{nuevo_est}'.")
                     st.rerun()
     else:
         st.info("No hay solicitudes registradas.")
 
 with tabs[1]:
-    df = obtener_inventario()
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
+    st.subheader("📊 Tablero de Trazabilidad: Recepción, Proceso y Envío")
+    st.markdown("Visualice el estatus en tiempo real de todas las solicitudes distribuidas en sus tres fases operativas.")
+    
+    df_tablero = obtener_solicitudes()
+    if not df_tablero.empty:
+        col_f1, col_f2, col_f3 = st.columns(3)
+        
+        fases = ["Recepción de Documento", "Proceso", "Enviado"]
+        colores_fase = {"Recepción de Documento": "📥", "Proceso": "⚙️", "Enviado": "🚚"}
+        
+        cols_tablero = st.columns(3)
+        for i, fase in enumerate(fases):
+            with cols_tablero[i]:
+                st.markdown(f"### {colores_fase[fase]} {fase}")
+                df_fase = df_tablero[df_tablero['estatus'] == fase]
+                st.metric(f"Total en {fase}", len(df_fase))
+                st.divider()
+                
+                for _, r in df_fase.iterrows():
+                    with st.container():
+                        st.markdown(f"**`{r['codigo_solicitud']}`**")
+                        st.write(f"👤 **Solicitante:** {r['solicitado_por']}")
+                        st.write(f"🏢 **Oficina:** {r['oficina_zoom']}")
+                        st.write(f"📦 **Piezas:** {r['cantidad_total']}")
+                        
+                        # Acceso rápido de modificación para el adm o usuarios autorizados
+                        nuevo_cambio = st.selectbox("Cambiar fase", fases, index=fases.index(r['estatus']), key=f"board_{r['id']}")
+                        if nuevo_cambio != r['estatus']:
+                            if st.button("Actualizar fase", key=f"b_upd_{r['id']}"):
+                                actualizar_estatus_solicitud(r['id'], nuevo_cambio)
+                                st.success("¡Estatus actualizado!")
+                                st.rerun()
+                        st.markdown("---")
     else:
-        st.info("Inventario vacío.")
+        st.info("No hay solicitudes para mostrar en el tablero.")
 
 with tabs[2]:
-    st.subheader("➕ Registro Individual")
-    with st.form("form_pop"):
-        producto = st.text_input("Material").strip()
-        categoria = st.selectbox("Categoría", ["Textil", "Papelería", "Accesorios", "Eventos", "Merchandising"])
-        cantidad = st.selectbox("Cantidad", OPCIONES_CANTIDAD[1:])
-        tipo = st.radio("Operación", ["Entrada", "Salida"])
-        ubicacion = st.text_input("Ubicación", value="Almacén Principal")
-        if st.form_submit_button("Guardar"):
-            ok, msg = registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion)
-            if ok:
-                st.success(msg)
-                st.rerun()
-            else:
-                st.error(msg)
-
-with tabs[3]:
-    st.subheader("📂 Inventario Masivo")
-    archivo = st.file_uploader("Subir inventario", type=["xlsx", "csv"])
-    modo_carga = st.radio("Modo", ["Sumar al inventario actual", "Reemplazar todo el inventario"])
-    if archivo is not None:
-        if st.button("Confirmar Carga"):
-            df_subido = pd.read_csv(archivo) if archivo.name.endswith('.csv') else pd.read_excel(archivo)
-            cargar_masivo(df_subido, modo_carga)
-            st.success("Cargado con éxito.")
-            st.rerun()
-
-with tabs[4]:
-    st.subheader("💬 Asistente IA")
-    user_query = st.chat_input("Pregunta algo sobre el inventario...")
-    if user_query:
-        if "OPENAI_API_KEY" not in st.secrets:
-            st.error("Configure OPENAI_API_KEY en Streamlit Secrets.")
-        else:
-            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-            response = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": user_query}])
-            st.markdown(response.choices[0].message.content)
+    df = obtener_inventario()
+    if not df.empty:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Variedad de Materiales
