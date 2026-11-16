@@ -698,7 +698,7 @@ with tabs[5]:
     user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están en proceso?")
     if user_query:
         if "GEMINI_API_KEY" not in st.secrets:
-            st.error("⚠️ Configure su 'GEMINI_API_KEY' en los Secretos de Streamlit Cloud (como lo tienes en la imagen).")
+            st.error("⚠️ Configure su 'GEMINI_API_KEY' en los Secretos de Streamlit Cloud.")
         else:
             try:
                 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -719,6 +719,7 @@ with tabs[5]:
                     f"SOLICITUDES RECIBIDAS:\n{datos_sol}\n\nPregunta del usuario: {user_query}"
                 )
 
+                # Se utiliza el modelo estándar compatible gemini-1.5-flash
                 model = genai.GenerativeModel("gemini-1.5-flash")
                 response = model.generate_content(prompt_sistema)
                 respuesta_ia = response.text
