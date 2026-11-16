@@ -16,6 +16,8 @@ USUARIOS_AUTORIZADOS = {
     "maribel@weppa.io": "maribel2026"
 }
 
+CLAVE_GEMINI_RESPALDO = "AQ.Ab8RN6Jc3YxUuxGl0Reyp0_LvoSJRzPSVvvhMOSahq3JcJdQYg"
+
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     25, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500,
@@ -529,8 +531,9 @@ with tabs[4]:
 
     user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están pendientes?")
     if user_query:
+        gemini_key = st.secrets["GEMINI_API_KEY"].strip() if "GEMINI_API_KEY" in st.secrets else CLAVE_GEMINI_RESPALDO
+
         try:
-            gemini_key = st.secrets["GEMINI_API_KEY"]
             genai.configure(api_key=gemini_key)
 
             st.session_state.chat_history.append({"role": "user", "content": user_query})
@@ -538,17 +541,28 @@ with tabs[4]:
                 st.markdown(user_query)
 
             df_actual = obtener_inventario()
-            datos_contexto = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
+            datos_inv = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
 
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            df_sol_ia = obtener_solicitudes()
+            datos_sol = df_sol_ia[["codigo_solicitud", "solicitado_por", "tipo_solicitud", "cantidad_total", "estatus"]].to_string(index=False) if not df_sol_ia.empty else "Sin solicitudes."
+
             prompt_completo = (
                 "Eres el asistente logístico experto de Material POP para Weppa. "
-                f"Utiliza estrictamente los siguientes datos de inventario:\n{datos_contexto}\n\n"
+                f"Utiliza estrictamente los siguientes datos:\n\nINVENTARIO:\n{datos_inv}\n\n"
+                f"SOLICITUDES RECIBIDAS:\n{datos_sol}\n\n"
                 f"Pregunta del usuario: {user_query}"
             )
-            res = model.generate_content(prompt_completo)
+
+            try:
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                res = model.generate_content(prompt_completo)
+            except Exception:
+                model = genai.GenerativeModel("gemini-2.0-flash")
+                res = model.generate_content(prompt_completo)
+
             with st.chat_message("assistant"):
                 st.markdown(res.text)
             st.session_state.chat_history.append({"role": "assistant", "content": res.text})
-        except Exception:
-            st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
+
+        except Exception as err:
+            st.error(f"⚠️ Detalle técnico de la API: {err}")
