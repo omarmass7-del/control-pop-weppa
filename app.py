@@ -129,7 +129,7 @@ def init_db():
 init_db()
 
 # ==========================================
-# ESTILOS CSS AVANZADOS (Legibilidad y Contraste)
+# ESTILOS CSS AVANZADOS
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -154,17 +154,14 @@ else:
 st.markdown(f"""
     <style>
         {bg_css}
-        
         .stExpander, .stForm, div[data-testid="stVerticalBlock"] > div > div.stTextInput, div[data-testid="stSelectbox"] {{
             background-color: rgba(25, 25, 25, 0.85);
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.15);
         }}
-        
         h1, h2, h3, h4, h5, h6, p, span, label, div {{
             color: #f1f1f1 !important;
         }}
-        
         .stButton>button {{
             border-radius: 8px;
             font-weight: 600;
@@ -178,12 +175,11 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# Renderizar Banner Global si existe archivo personalizado
 if os.path.exists(BANNER_PATH):
     st.image(BANNER_PATH, use_container_width=True)
 
 # ==========================================
-# 2. NAVEGACIÓN: FORMULARIO PÚBLICO VS EQUIPO
+# 2. NAVEGACIÓN
 # ==========================================
 modo_vista = st.sidebar.radio(
     "Navegación",
@@ -192,17 +188,43 @@ modo_vista = st.sidebar.radio(
 
 if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.title("📋 Solicitud de Material POP — Weppa")
-    st.markdown("Complete la información. Al seleccionar el **Estado de destino**, el sistema cargará automáticamente las agencias de Zoom y autocompletará la dirección, municipio y parroquia.")
+    st.markdown("Complete la información. Al seleccionar el **Estado**, el sistema cargará automáticamente las agencias y rellenará la dirección, código, municipio y parroquia.")
 
     if "solicitud_enviada_ok" not in st.session_state:
         st.session_state.solicitud_enviada_ok = None
 
     if st.session_state.solicitud_enviada_ok:
-        st.success(f"✅ **¡Solicitud enviada con éxito!**\n\n**Código de solicitud:** `{st.session_state.solicitud_enviada_ok}`\n\n**Estatus actual:** Recibido (En revisión por logística Weppa).")
+        st.success(f"✅ **¡Solicitud enviada con éxito!**\n\n**Código de solicitud:** `{st.session_state.solicitud_enviada_ok}`\n\n**Estatus actual:** Recibido.")
         if st.button("Hacer otra solicitud"):
             st.session_state.solicitud_enviada_ok = None
             st.rerun()
         st.stop()
+
+    # Callback para autocompletar al cambiar de agencia seleccionada
+    def actualizar_datos_agencia():
+        agencia_elegida = st.session_state.get("sel_agencia_zoom", "")
+        estado_actual = st.session_state.get("sel_estado_destino", "Seleccione un estado...")
+        
+        if os.path.exists(ZOOM_EXCEL_PATH) and agencia_elegida and agencia_elegida != "Seleccione agencia Zoom...":
+            try:
+                df_z = pd.read_excel(ZOOM_EXCEL_PATH)
+                df_z.columns = [str(c).strip() for c in df_z.columns]
+                
+                # Filtrar por estado y agencia
+                df_filtro = df_z[(df_z['Estado'].astype(str).str.strip().str.lower() == estado_actual.lower()) & 
+                                 (df_z['Agencia'].astype(str).str.strip() == agencia_elegida)]
+                
+                if not df_filtro.empty:
+                    row = df_filtro.iloc[0]
+                    st.session_state.input_dir = str(row.get('Direccion', '')) if pd.notna(row.get('Direccion')) else ''
+                    st.session_state.input_mun = str(row.get('Municipio', '')) if pd.notna(row.get('Municipio')) else ''
+                    st.session_state.input_par = str(row.get('Parroquia', '')) if pd.notna(row.get('Parroquia')) else ''
+                    codigo_val = str(row.get('Codigo', '')) if pd.notna(row.get('Codigo')) else ''
+                    st.session_state.input_oficina_completa = f"{agencia_elegida} (Cod: {codigo_val})" if codigo_val else agencia_elegida
+                else:
+                    st.session_state.input_oficina_completa = agencia_elegida
+            except Exception:
+                pass
 
     with st.form("form_solicitud_pop_weppa"):
         st.subheader("1. Información general")
@@ -241,67 +263,39 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
 
         st.divider()
-        st.subheader("3. Envío por Zoom (Autocompletado por Estado)")
+        st.subheader("3. Envío por Zoom (Autocompletado Automático)")
         
-        # Carga del Excel de Agencias Zoom
+        # Leer Excel de agencias
         df_zoom_excel = pd.DataFrame()
         if os.path.exists(ZOOM_EXCEL_PATH):
             try:
                 df_zoom_excel = pd.read_excel(ZOOM_EXCEL_PATH)
-                # Normalizar nombres de columnas eliminando espacios y acentos básicos
-                df_zoom_excel.columns = [str(c).strip().lower() for c in df_zoom_excel.columns]
-            except Exception as e:
-                st.error(f"Error al leer el Excel de Zoom: {e}")
+                df_zoom_excel.columns = [str(c).strip() for c in df_zoom_excel.columns]
+            except Exception:
+                pass
 
         z1, z2, z3 = st.columns(3)
         with z1:
-            estado_destino = st.selectbox("Estado de destino *", ESTADOS_VENEZUELA)
+            estado_destino = st.selectbox("Estado de destino *", ESTADOS_VENEZUELA, key="sel_estado_destino")
             ciudad_destino = st.text_input("Ciudad de destino").strip()
 
-            agencia_seleccionada = ""
-            codigo_agencia_val = ""
-            direccion_localidad_val = ""
-            municipio_val = ""
-            parroquia_val = ""
-
+            lista_agencias = []
             if not df_zoom_excel.empty and estado_destino != "Seleccione un estado...":
-                # Filtrar filas del estado ('estado' exacto según tu Excel)
-                if 'estado' in df_zoom_excel.columns:
-                    df_filtrado = df_zoom_excel[df_zoom_excel['estado'].astype(str).str.strip().str.lower() == estado_destino.lower()]
-                    
-                    if not df_filtrado.empty and 'agencia' in df_filtrado.columns:
-                        lista_agencias = df_filtrado['agencia'].dropna().astype(str).tolist()
-                        opciones_agencia = ["Seleccione agencia Zoom..."] + lista_agencias + ["Otra agencia / A convenir"]
-                        
-                        agencia_sel = st.selectbox("Agencia / Oficina Zoom *", opciones_agencia)
-                        
-                        if agencia_sel != "Seleccione agencia Zoom..." and agencia_sel != "Otra agencia / A convenir":
-                            agencia_seleccionada = agencia_sel
-                            fila = df_filtrado[df_filtrado['agencia'].astype(str) == agencia_sel]
-                            if not fila.empty:
-                                if 'codigo' in fila.columns: codigo_agencia_val = str(fila.iloc[0]['codigo'])
-                                if 'direccion' in fila.columns: direccion_localidad_val = str(fila.iloc[0]['direccion'])
-                                if 'municipio' in fila.columns: municipio_val = str(fila.iloc[0]['municipio'])
-                                if 'parroquia' in fila.columns: parroquia_val = str(fila.iloc[0]['parroquia'])
-                        elif agencia_sel == "Otra agencia / A convenir":
-                            agencia_seleccionada = st.text_input("Escriba el nombre de la agencia").strip()
-                    else:
-                        st.info(f"No hay agencias registradas para {estado_destino} en el Excel.")
-                        agencia_seleccionada = st.text_input("Agencia Zoom de destino").strip()
-                else:
-                    st.warning("⚠️ El Excel cargado no contiene la columna 'Estado'. Vuelva a subirlo con la columna 'Estado'.")
-                    agencia_seleccionada = st.text_input("Agencia Zoom de destino").strip()
-            else:
-                if estado_destino == "Seleccione un estado...":
-                    st.caption("👈 Seleccione un estado primero.")
-                agencia_seleccionada = st.text_input("Agencia Zoom de destino").strip()
+                if 'Estado' in df_zoom_excel.columns and 'Agencia' in df_zoom_excel.columns:
+                    df_fil = df_zoom_excel[df_zoom_excel['Estado'].astype(str).str.strip().str.lower() == estado_destino.lower()]
+                    lista_agencias = df_fil['Agencia'].dropna().astype(str).tolist()
 
-            oficina_zoom = f"{agencia_seleccionada} (Cod: {codigo_agencia_val})" if codigo_agencia_val else agencia_seleccionada
+            if lista_agencias:
+                agencia_sel = st.selectbox("Agencia / Oficina Zoom *", ["Seleccione agencia Zoom..."] + lista_agencias, key="sel_agencia_zoom", on_change=actualizar_datos_agencia)
+            else:
+                agencia_sel = st.text_input("Agencia Zoom de destino *").strip()
+
+            oficina_zoom = st.session_state.get("input_oficina_completa", agencia_sel if isinstance(agencia_sel, str) else "")
 
         with z2:
-            direccion_localidad = st.text_input("Dirección o localidad", value=direccion_localidad_val).strip()
-            municipio = st.text_input("Municipio", value=municipio_val).strip()
-            parroquia = st.text_input("Parroquia", value=parroquia_val).strip()
+            direccion_localidad = st.text_input("Dirección o localidad", value=st.session_state.get("input_dir", "")).strip()
+            municipio = st.text_input("Municipio", value=st.session_state.get("input_mun", "")).strip()
+            parroquia = st.text_input("Parroquia", value=st.session_state.get("input_par", "")).strip()
             nombre_retiro = st.text_input("Nombre de quien retirará").strip()
 
         with z3:
@@ -326,7 +320,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
 
         st.divider()
         st.subheader("4. Materiales solicitados")
-        st.caption("Haga clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas.")
         df_mat_template = pd.DataFrame(CATALOGO_MATERIALES_BASE)
         df_mat_editado = st.data_editor(
             df_mat_template,
@@ -338,7 +331,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
                 "Material": st.column_config.TextColumn("Material"),
                 "Cantidad": st.column_config.SelectboxColumn(
                     "Cantidad",
-                    help="Despliegue y seleccione la cantidad de piezas",
                     options=OPCIONES_CANTIDAD,
                     default=0,
                     required=True
@@ -356,11 +348,11 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             estado_final = "" if estado_destino == "Seleccione un estado..." else estado_destino
 
             if not solicitado_por or not num_sol:
-                st.error("⚠️ Por favor complete los campos obligatorios: 'Solicitado por' y 'Número de contacto'.")
+                st.error("⚠️ Complete 'Solicitado por' y 'Número de contacto'.")
             elif estado_destino == "Seleccione un estado...":
-                st.error("⚠️ Por favor seleccione un estado de destino.")
+                st.error("⚠️ Seleccione un estado de destino.")
             elif cantidad_total <= 0:
-                st.error("⚠️ Debe seleccionar al menos 1 material con cantidad mayor a 0.")
+                st.error("⚠️ Debe seleccionar al menos 1 material.")
             else:
                 codigo_sol = f"POP-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
                 materiales_json = materiales_filtrados.to_json(orient="records", force_ascii=False)
@@ -394,29 +386,23 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.stop()
 
 # ==========================================
-# 3. LOGIN PARA EL EQUIPO INTERNO
+# 3. LOGIN Y EQUIPO INTERNO
 # ==========================================
 if not st.session_state.autenticado:
     st.title("🔒 Acceso Corporativo — Control POP Weppa")
-    st.markdown("Inicie sesión utilizando su **correo corporativo** (`@weppa.io`) o usuario administrador.")
-
     with st.form("login_form"):
         usuario = st.text_input("Correo o Usuario").strip().lower()
         clave = st.text_input("Contraseña", type="password")
         entrar = st.form_submit_button("Ingresar al Sistema")
-
         if entrar:
             if usuario in USUARIOS_AUTORIZADOS and USUARIOS_AUTORIZADOS[usuario] == clave:
                 st.session_state.autenticado = True
                 st.session_state.usuario_actual = usuario
                 st.rerun()
             else:
-                st.error("❌ Credenciales incorrectas. Verifique su usuario y contraseña.")
+                st.error("❌ Credenciales incorrectas.")
     st.stop()
 
-# ==========================================
-# 4. FUNCIONES DE GESTIÓN INTERNA
-# ==========================================
 def obtener_inventario():
     with sqlite3.connect(DB_PATH) as conn:
         df = pd.read_sql_query("SELECT id, producto AS 'Material', categoria AS 'Categoría', cantidad AS 'Cantidad', ubicacion AS 'Ubicación' FROM inventario", conn)
@@ -430,32 +416,27 @@ def obtener_solicitudes():
 def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
-        
         cursor.execute("SELECT estatus, materiales_json FROM solicitudes_v2 WHERE id = ?", (sol_id,))
         row = cursor.fetchone()
         if not row:
             return
         estatus_anterior, materiales_json = row[0], row[1]
-
         if nuevo_estatus == "Enviado" and estatus_anterior != "Enviado":
             try:
                 mats_list = json.loads(materiales_json)
                 for item in mats_list:
                     prod_nombre = item["Material"]
                     cant_solicitada = int(item["Cantidad"])
-
                     cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod_nombre,))
                     inv_row = cursor.fetchone()
                     if inv_row:
                         stock_actual = inv_row[0]
                         nuevo_stock = max(0, stock_actual - cant_solicitada)
                         cursor.execute("UPDATE inventario SET cantidad = ? WHERE producto = ?", (nuevo_stock, prod_nombre))
-                    
                     cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
                                    (prod_nombre, "Salida Automática (Solicitud Enviada)", cant_solicitada, st.session_state.usuario_actual))
             except Exception as e:
                 st.error(f"Error descontando inventario: {e}")
-
         cursor.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
         conn.commit()
 
@@ -464,7 +445,6 @@ def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
         cursor = conn.cursor()
         cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (producto,))
         res = cursor.fetchone()
-
         if res is None:
             if tipo == "Entrada":
                 cursor.execute("INSERT INTO inventario (producto, categoria, cantidad, ubicacion) VALUES (?, ?, ?, ?)",
@@ -476,24 +456,21 @@ def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
             if nueva_cant < 0:
                 return False, f"Stock insuficiente. Disponible: {res[0]}."
             cursor.execute("UPDATE inventario SET cantidad = ?, ubicacion = ? WHERE producto = ?", (nueva_cant, ubicacion, producto))
-
         cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
                        (producto, tipo, cantidad, st.session_state.usuario_actual))
         conn.commit()
-    return True, f"¡{tipo} de {cantidad} unidad(es) de '{producto}' registrada con éxito!"
+    return True, f"¡{tipo} registrada con éxito!"
 
 def cargar_masivo(df_subido, modo):
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         if modo == "Reemplazar todo el inventario":
             cursor.execute("DELETE FROM inventario")
-
         for _, row in df_subido.iterrows():
             prod = str(row["Material"]).strip()
             cat = str(row.get("Categoría", "General")).strip()
             cant = int(row["Cantidad"])
             ubi = str(row.get("Ubicación", "Almacén Principal")).strip()
-
             cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod,))
             existe = cursor.fetchone()
             if existe and modo == "Sumar al inventario actual":
@@ -503,16 +480,11 @@ def cargar_masivo(df_subido, modo):
                                (prod, cat, cant, ubi))
         conn.commit()
 
-# ==========================================
-# 5. PANEL INTERNO DE ADMINISTRACIÓN
-# ==========================================
 with st.sidebar:
     st.write(f"👤 Conectado como:\n**{st.session_state.usuario_actual}**")
-    
     if st.session_state.usuario_actual == "adm":
         st.divider()
         st.markdown("### 🎨 Personalización Visual")
-        
         banner_subido = st.file_uploader("Subir Banner Superior", type=["png", "jpg", "jpeg"])
         if banner_subido is not None:
             with open(BANNER_PATH, "wb") as f:
@@ -523,7 +495,6 @@ with st.sidebar:
         if os.path.exists(BANNER_PATH):
             if st.button("🗑️ Eliminar Banner"):
                 os.remove(BANNER_PATH)
-                st.success("Banner eliminado.")
                 st.rerun()
 
         st.markdown("---")
@@ -537,12 +508,10 @@ with st.sidebar:
         if os.path.exists(BACKGROUND_PATH):
             if st.button("🗑️ Eliminar Fondo"):
                 os.remove(BACKGROUND_PATH)
-                st.success("Fondo eliminado.")
                 st.rerun()
 
         st.divider()
         st.markdown("### 📦 Agencias Zoom (Excel)")
-        st.caption("Tu Excel ya es compatible con: Estado, Agencia, Codigo, Direccion, Municipio, Parroquia")
         zoom_subido = st.file_uploader("Actualizar Excel Zoom", type=["xlsx", "csv"])
         if zoom_subido is not None:
             try:
@@ -551,12 +520,11 @@ with st.sidebar:
                 st.success("¡Excel de agencias Zoom cargado con éxito!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Error procesando el archivo: {e}")
+                st.error(f"Error: {e}")
 
         if os.path.exists(ZOOM_EXCEL_PATH):
             if st.button("🗑️ Eliminar Excel Zoom"):
                 os.remove(ZOOM_EXCEL_PATH)
-                st.success("Excel Zoom eliminado.")
                 st.rerun()
 
     st.divider()
@@ -577,195 +545,66 @@ tabs = st.tabs([
 with tabs[0]:
     st.subheader("📥 Gestión y Ciclo de Solicitudes POP")
     df_sol = obtener_solicitudes()
-
     if not df_sol.empty:
-        st.download_button(
-            label="⬇️ Descargar Reporte de Solicitudes (CSV)",
-            data=df_sol.drop(columns=["materiales_json"]).to_csv(index=False).encode("utf-8"),
-            file_name="solicitudes_pop_weppa.csv",
-            mime="text/csv"
-        )
+        st.download_button("⬇️ Descargar Reporte (CSV)", data=df_sol.drop(columns=["materiales_json"]).to_csv(index=False).encode("utf-8"), file_name="solicitudes.csv", mime="text/csv")
         st.divider()
-
         for _, row in df_sol.iterrows():
-            estatus_actual = row['estatus'].upper()
-            color_etiqueta = "🟢" if estatus_actual == "ENVIADO" else ("🟡" if estatus_actual == "APROBADO" else "🔵")
-            
-            titulo_exp = f"{color_etiqueta} [{estatus_actual}] {row['codigo_solicitud']} — Solicitante: {row['solicitado_por']} | ({row['cantidad_total']} piezas)"
-            with st.expander(titulo_exp):
-                col_i1, col_i2, col_i3 = st.columns(3)
-                with col_i1:
-                    st.markdown("**📌 Información General**")
-                    st.write(f"📅 **Fecha solicitud:** {row['fecha_solicitud']}")
-                    st.write(f"📆 **Entrega requerida:** {row['fecha_entrega']}")
-                    st.write(f"👤 **Solicitante:** {row['solicitado_por']} ({row['cargo_departamento']})")
-                    st.write(f"📞 **Contacto:** {row['contacto_solicitante']}")
-                    st.write(f"🏢 **Canal/Área:** {row['canal_area']} | **Prioridad:** {row['prioridad']}")
-                with col_i2:
-                    st.markdown("**🏪 Tienda o Actividad**")
-                    st.write(f"🏪 **Tienda:** {row['nombre_tienda']} (Nueva: {row['tienda_nueva']})")
-                    st.write(f"🎪 **Evento:** {row['descripcion_evento']} ({row['fechas_evento']})")
-                    st.write(f"🤝 **Aliado:** {row['aliado_comercial']} | **Promotor:** {row['nombre_promotor']}")
-                    st.write(f"📍 **Zona:** {row['zona_cobertura']} | **Activación:** {row['activacion_asignada']}")
-                    st.write(f"🎯 **Objetivo:** {row['objetivo_solicitud']}")
-                    if row['detalle_adicional']:
-                        st.write(f"📝 **Detalle:** {row['detalle_adicional']}")
-                with col_i3:
-                    st.markdown("**📦 Envío por Zoom**")
-                    st.write(f"🗺️ **Destino:** {row['estado_destino']}, {row['ciudad_destino']}")
-                    st.write(f"🏢 **Oficina Zoom:** {row['oficina_zoom']}")
-                    st.write(f"🏠 **Dirección:** {row['direccion_localidad']} ({row['municipio']}, {row['parroquia']})")
-                    st.write(f"🪪 **Retira:** {row['nombre_retiro']} (CI: {row['cedula_retiro']})")
-                    st.write(f"📱 **Tel/Correo:** {row['telefono_retiro']} | {row['correo_retiro']}")
-                    st.write(f"🕒 **Horario/Ref:** {row['horario_retiro']} — {row['referencia_ubicacion']}")
-                    if row['observaciones_entrega']:
-                        st.write(f"🚚 **Obs. entrega:** {row['observaciones_entrega']}")
-
-                st.markdown("**📋 Detalle de Materiales Solicitados**")
+            with st.expander(f"[{row['estatus'].upper()}] {row['codigo_solicitud']} — {row['solicitado_por']} | ({row['cantidad_total']} piezas)"):
+                st.write(f"**Destino:** {row['estado_destino']}, {row['ciudad_destino']} — **Oficina:** {row['oficina_zoom']}")
+                st.write(f"**Dirección:** {row['direccion_localidad']} (Mun: {row['municipio']}, Parr: {row['parroquia']})")
                 try:
-                    df_mats = pd.read_json(row["materiales_json"])
-                    st.dataframe(df_mats, use_container_width=True, hide_index=True)
+                    st.dataframe(pd.read_json(row["materiales_json"]), use_container_width=True, hide_index=True)
                 except Exception:
-                    st.write("Sin detalle de materiales.")
-
-                st.divider()
-                col_est1, col_est2 = st.columns([2, 1])
-                with col_est1:
-                    opciones_est = ["Recibido", "Aprobado", "Enviado"]
-                    idx_actual = opciones_est.index(row["estatus"]) if row["estatus"] in opciones_est else 0
-                    nuevo_est = st.selectbox("Actualizar estatus (Al pasar a 'Enviado' se descuenta el stock)", opciones_est, index=idx_actual, key=f"sel_{row['id']}")
-                with col_est2:
-                    st.write("")
-                    st.write("")
-                    if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
-                        actualizar_estatus_solicitud(row["id"], nuevo_est)
-                        if nuevo_est == "Enviado":
-                            st.success(f"✅ ¡Estatus 'Enviado'! Inventario restado automáticamente del sistema.")
-                        else:
-                            st.success(f"✅ Estatus actualizado a '{nuevo_est}'.")
-                        st.rerun()
+                    pass
+                nuevo_est = st.selectbox("Estatus", ["Recibido", "Aprobado", "Enviado"], index=["Recibido", "Aprobado", "Enviado"].index(row["estatus"]), key=f"sel_{row['id']}")
+                if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
+                    actualizar_estatus_solicitud(row["id"], nuevo_est)
+                    st.success("Estatus actualizado.")
+                    st.rerun()
     else:
-        st.info("No hay solicitudes registradas todavía en el sistema.")
+        st.info("No hay solicitudes registradas.")
 
 with tabs[1]:
     df = obtener_inventario()
     if not df.empty:
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Variedad de Materiales", len(df))
-        with col2:
-            st.metric("Total Unidades Disponibles", int(df['Cantidad'].sum()))
-        st.divider()
         st.dataframe(df, use_container_width=True)
     else:
-        st.info("El inventario está vacío. Suba un archivo Excel/CSV o registre materiales en la pestaña siguiente.")
+        st.info("Inventario vacío.")
 
 with tabs[2]:
-    st.subheader("➕ Registro Individual de Entradas o Salidas")
+    st.subheader("➕ Registro Individual")
     with st.form("form_pop"):
-        col_a, col_b = st.columns(2)
-        with col_a:
-            producto = st.text_input("Nombre del Material", placeholder="Ej: Stand, Lanyards, Vasos térmicos").strip()
-            categoria = st.selectbox("Categoría", ["Textil", "Papelería", "Accesorios", "Eventos", "Merchandising"])
-            cantidad = st.selectbox("Cantidad", OPCIONES_CANTIDAD[1:])
-        with col_b:
-            tipo = st.radio("Tipo de Operación", ["Entrada", "Salida"])
-            ubicacion = st.text_input("Ubicación / Destino", value="Almacén Principal")
-
-        if st.form_submit_button("Guardar Movimiento en Inventario"):
-            if producto:
-                ok, msg = registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion)
-                if ok:
-                    st.success(msg)
-                    st.rerun()
-                else:
-                    st.error(msg)
+        producto = st.text_input("Material").strip()
+        categoria = st.selectbox("Categoría", ["Textil", "Papelería", "Accesorios", "Eventos", "Merchandising"])
+        cantidad = st.selectbox("Cantidad", OPCIONES_CANTIDAD[1:])
+        tipo = st.radio("Operación", ["Entrada", "Salida"])
+        ubicacion = st.text_input("Ubicación", value="Almacén Principal")
+        if st.form_submit_button("Guardar"):
+            ok, msg = registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion)
+            if ok:
+                st.success(msg)
+                st.rerun()
             else:
-                st.warning("Debe escribir el nombre del material.")
+                st.error(msg)
 
 with tabs[3]:
-    st.subheader("📂 Importar o Exportar Inventario Masivo")
-    df_export = obtener_inventario()
-    if df_export.empty:
-        df_export = pd.DataFrame({
-            "Material": ["Stand", "Lanyards"],
-            "Categoría": ["Eventos", "Accesorios"],
-            "Cantidad": [10, 200],
-            "Ubicación": ["Caracas", "Lechería"]
-        })
-
-    st.download_button(
-        label="⬇️ Descargar Inventario Actual / Plantilla (CSV)",
-        data=df_export.to_csv(index=False).encode('utf-8'),
-        file_name="inventario_weppa.csv",
-        mime="text/csv"
-    )
-    st.divider()
-    archivo = st.file_uploader("Subir archivo de inventario (.xlsx o .csv)", type=["xlsx", "csv"])
-    modo_carga = st.radio("¿Qué hacer con los datos subidos?", ["Sumar al inventario actual", "Reemplazar todo el inventario"])
-
+    st.subheader("📂 Inventario Masivo")
+    archivo = st.file_uploader("Subir inventario", type=["xlsx", "csv"])
+    modo_carga = st.radio("Modo", ["Sumar al inventario actual", "Reemplazar todo el inventario"])
     if archivo is not None:
-        try:
+        if st.button("Confirmar Carga"):
             df_subido = pd.read_csv(archivo) if archivo.name.endswith('.csv') else pd.read_excel(archivo)
-            st.dataframe(df_subido.head())
-            if st.button("✅ Confirmar Carga Masiva"):
-                if "Material" in df_subido.columns and "Cantidad" in df_subido.columns:
-                    cargar_masivo(df_subido, modo_carga)
-                    st.success("¡Inventario cargado y sincronizado exitosamente!")
-                    st.rerun()
-                else:
-                    st.error("El archivo debe contener obligatoriamente las columnas 'Material' y 'Cantidad'.")
-        except Exception as e:
-            st.error(f"Error al procesar el archivo: {e}")
+            cargar_masivo(df_subido, modo_carga)
+            st.success("Cargado con éxito.")
+            st.rerun()
 
 with tabs[4]:
-    st.subheader("💬 Asistente Logístico con ChatGPT (OpenAI)")
-    st.markdown("Consulte al asistente inteligente sobre el stock actual o el estado de las solicitudes en tiempo real.")
-
-    if "chat_history_openai" not in st.session_state:
-        st.session_state.chat_history_openai = []
-
-    for msg in st.session_state.chat_history_openai:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están aprobadas?")
+    st.subheader("💬 Asistente IA")
+    user_query = st.chat_input("Pregunta algo sobre el inventario...")
     if user_query:
         if "OPENAI_API_KEY" not in st.secrets:
-            st.error("⚠️ Configure su 'OPENAI_API_KEY' en los Secretos de Streamlit Cloud.")
+            st.error("Configure OPENAI_API_KEY en Streamlit Secrets.")
         else:
-            try:
-                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-                st.session_state.chat_history_openai.append({"role": "user", "content": user_query})
-                with st.chat_message("user"):
-                    st.markdown(user_query)
-
-                df_actual = obtener_inventario()
-                datos_inv = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
-
-                df_sol_ia = obtener_solicitudes()
-                datos_sol = df_sol_ia[["codigo_solicitud", "solicitado_por", "tipo_solicitud", "cantidad_total", "estatus"]].to_string(index=False) if not df_sol_ia.empty else "Sin solicitudes."
-
-                prompt_sistema = (
-                    "Eres el asistente logístico experto de Material POP para Weppa. "
-                    f"Utiliza estrictamente los siguientes datos actuales:\n\nINVENTARIO:\n{datos_inv}\n\n"
-                    f"SOLICITUDES RECIBIDAS:\n{datos_sol}"
-                )
-
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": prompt_sistema},
-                        {"role": "user", "content": user_query}
-                    ]
-                )
-
-                respuesta_ia = response.choices[0].message.content
-
-                with st.chat_message("assistant"):
-                    st.markdown(respuesta_ia)
-                st.session_state.chat_history_openai.append({"role": "assistant", "content": respuesta_ia})
-
-            except Exception as err:
-                st.error(f"⚠️ Error al conectar con OpenAI: {err}")
+            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+            response = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": user_query}])
+            st.markdown(response.choices[0].message.content)
