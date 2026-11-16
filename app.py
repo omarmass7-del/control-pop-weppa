@@ -1,11 +1,13 @@
 import os
+import json
 import sqlite3
+from datetime import date, datetime
 import pandas as pd
 import streamlit as st
 import google.generativeai as genai
 
 # ==========================================
-# 0. CONFIGURACIÓN DE ACCESO CORPORATIVO Y PÚBLICO
+# 0. CONFIGURACIÓN DE ACCESO Y CATÁLOGO POP
 # ==========================================
 USUARIOS_AUTORIZADOS = {
     "adm": "weppa2026",
@@ -13,6 +15,23 @@ USUARIOS_AUTORIZADOS = {
     "omar@weppa.io": "omar2026",
     "maribel@weppa.io": "maribel2026"
 }
+
+CATALOGO_MATERIALES_BASE = [
+    {"Material_ID": "POP-001", "Material": "Stand", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-002", "Material": "Pendón grande", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-003", "Material": "Lanyards", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-004", "Material": "Vasos térmicos", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-005", "Material": "Dummies", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-006", "Material": "Portateléfono redondo", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-007", "Material": "Portateléfono cuadrado", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-008", "Material": "Gobos y portaglobos", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-009", "Material": "Kits pequeños", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-010", "Material": "Kits grandes", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-011", "Material": "Visera de gorras", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-012", "Material": "Chupis", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-013", "Material": "Habladores", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-014", "Material": "Bolsas de tela", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""}
+]
 
 st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wide")
 
@@ -45,60 +64,194 @@ def init_db():
                 fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Tabla para las solicitudes de formularios externos
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS solicitudes (
+            CREATE TABLE IF NOT EXISTS solicitudes_v2 (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                solicitante TEXT NOT NULL,
-                correo TEXT NOT NULL,
-                material TEXT NOT NULL,
-                cantidad INTEGER NOT NULL,
-                estatus TEXT NOT NULL,
-                fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                codigo_solicitud TEXT NOT NULL,
+                fecha_solicitud TEXT NOT NULL,
+                solicitado_por TEXT NOT NULL,
+                cargo_departamento TEXT,
+                canal_area TEXT,
+                tipo_solicitud TEXT,
+                prioridad TEXT,
+                fecha_entrega TEXT,
+                contacto_solicitante TEXT,
+                nombre_tienda TEXT,
+                tienda_nueva TEXT,
+                descripcion_evento TEXT,
+                fechas_evento TEXT,
+                aliado_comercial TEXT,
+                nombre_promotor TEXT,
+                zona_cobertura TEXT,
+                activacion_asignada TEXT,
+                objetivo_solicitud TEXT,
+                detalle_adicional TEXT,
+                estado_destino TEXT,
+                ciudad_destino TEXT,
+                oficina_zoom TEXT,
+                direccion_localidad TEXT,
+                municipio TEXT,
+                parroquia TEXT,
+                nombre_retiro TEXT,
+                cedula_retiro TEXT,
+                telefono_retiro TEXT,
+                correo_retiro TEXT,
+                referencia_ubicacion TEXT,
+                horario_retiro TEXT,
+                observaciones_entrega TEXT,
+                cantidad_total INTEGER,
+                materiales_json TEXT,
+                estatus TEXT NOT NULL
             )
         """)
 
 init_db()
 
 # ==========================================
-# 2. PANTALLA DE LOGIN O FORMULARIO PÚBLICO
+# 2. NAVEGACIÓN: FORMULARIO PÚBLICO VS EQUIPO
 # ==========================================
-modo_vista = st.sidebar.radio("Navegación", ["🔐 Iniciar Sesión (Equipo)", "📋 Solicitar Material POP (Externo)"])
+modo_vista = st.sidebar.radio(
+    "Navegación",
+    ["📋 Solicitar Material POP (Externo)", "🔐 Iniciar Sesión (Equipo)"]
+)
 
 if modo_vista == "📋 Solicitar Material POP (Externo)":
-    st.title("📋 Formulario de Solicitud de Material POP — Weppa")
-    st.markdown("Completa los datos para solicitar material. Una vez enviado, nuestro equipo procesará tu requerimiento.")
-    
-    with st.form("form_solicitud_externa"):
-        nombre_solicitante = st.text_input("Nombre y Apellido").strip()
-        correo_solicitante = st.text_input("Correo Electrónico").strip()
-        material_solicitado = st.text_input("Material POP / Descripción requerida").strip()
-        cantidad_solicitada = st.number_input("Cantidad", min_value=1, step=1)
-        
-        enviar_form = st.form_submit_button("Enviar Solicitud")
+    st.title("📋 Solicitud de Material POP — Weppa")
+    st.markdown("Completa las secciones del formulario y selecciona las cantidades de materiales requeridos.")
+
+    if "solicitud_enviada_ok" not in st.session_state:
+        st.session_state.solicitud_enviada_ok = None
+
+    if st.session_state.solicitud_enviada_ok:
+        st.success(f"✅ **¡Solicitud enviada con éxito!**\n\n**Código de solicitud:** `{st.session_state.solicitud_enviada_ok}`\n\n**Estatus:** Enviado (Recibido por el equipo de Weppa).")
+        if st.button("Hacer otra solicitud"):
+            st.session_state.solicitud_enviada_ok = None
+            st.rerun()
+        st.stop()
+
+    with st.form("form_solicitud_pop_weppa"):
+        st.subheader("1. Información general")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            fecha_solicitud = st.date_input("Fecha de solicitud", value=date.today())
+            solicitado_por = st.text_input("Solicitado por *").strip()
+            cargo_departamento = st.text_input("Cargo o departamento").strip()
+        with c2:
+            canal_area = st.text_input("Canal o área").strip()
+            tipo_solicitud = st.selectbox("Tipo de solicitud", ["Tienda", "Evento", "Promotor(a)"])
+            prioridad = st.selectbox("Prioridad", ["Alta", "Media", "Baja"], index=1)
+        with c3:
+            fecha_entrega = st.date_input("Fecha requerida de entrega", value=date.today())
+            contacto_solicitante = st.text_input("Número de contacto *").strip()
+
+        st.divider()
+        st.subheader("2. Tienda o actividad")
+        t1, t2 = st.columns(2)
+        with t1:
+            nombre_tienda = st.text_input("Nombre de la tienda").strip()
+            tienda_nueva = st.selectbox("¿Es tienda nueva?", ["No", "Sí"])
+            descripcion_evento = st.text_input("Si es para un evento indique de qué se trata").strip()
+            fechas_evento = st.text_input("Fecha o fechas del evento").strip()
+            aliado_comercial = st.text_input("Aliado comercial involucrado").strip()
+        with t2:
+            nombre_promotor = st.text_input("Si es para un promotor indique su nombre").strip()
+            zona_cobertura = st.text_input("Zona que cubre").strip()
+            activacion_asignada = st.text_input("Evento o activación asignada").strip()
+            objetivo_solicitud = st.text_input("Objetivo de la solicitud").strip()
+            detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
+
+        st.divider()
+        st.subheader("3. Envío por Zoom")
+        z1, z2, z3 = st.columns(3)
+        with z1:
+            estado_destino = st.text_input("Estado de destino").strip()
+            ciudad_destino = st.text_input("Ciudad de destino").strip()
+            oficina_zoom = st.text_input("Oficina Zoom de destino").strip()
+            direccion_localidad = st.text_input("Dirección o localidad").strip()
+        with z2:
+            municipio = st.text_input("Municipio").strip()
+            parroquia = st.text_input("Parroquia").strip()
+            nombre_retiro = st.text_input("Nombre de quien retirará").strip()
+            cedula_retiro = st.text_input("Cédula").strip()
+        with z3:
+            telefono_retiro = st.text_input("Número de teléfono (retiro)").strip()
+            correo_retiro = st.text_input("Correo electrónico (retiro)").strip()
+            referencia_ubicacion = st.text_input("Referencia de ubicación").strip()
+            horario_retiro = st.text_input("Horario estimado de retiro").strip()
+        observaciones_entrega = st.text_area("Observaciones de entrega", height=68).strip()
+
+        st.divider()
+        st.subheader("4. Materiales solicitados")
+        st.caption("Indica la cantidad (mayor a 0) en los materiales que necesitas. Puedes añadir medidas o especificaciones.")
+        df_mat_template = pd.DataFrame(CATALOGO_MATERIALES_BASE)
+        df_mat_editado = st.data_editor(
+            df_mat_template,
+            use_container_width=True,
+            hide_index=True,
+            disabled=["Material_ID", "Material"],
+            column_config={
+                "Material_ID": st.column_config.TextColumn("ID"),
+                "Material": st.column_config.TextColumn("Material"),
+                "Cantidad": st.column_config.NumberColumn("Cantidad", min_value=0, max_value=10000, step=1),
+                "Medidas_especificaciones": st.column_config.TextColumn("Medidas / Especificaciones"),
+                "Observaciones": st.column_config.TextColumn("Observaciones")
+            }
+        )
+
+        enviar_form = st.form_submit_button("📤 Enviar Solicitud POP")
+
         if enviar_form:
-            if nombre_solicitante and correo_solicitante and material_solicitado:
-                with sqlite3.connect(DB_PATH) as conn:
-                    conn.execute(
-                        "INSERT INTO solicitudes (solicitante, correo, material, cantidad, estatus) VALUES (?, ?, ?, ?, ?)",
-                        (nombre_solicitante, correo_solicitante, material_solicitado, cantidad_solicitada, "Recibido")
-                    )
-                    conn.commit()
-                st.success("¡Solicitud enviada con éxito! Tu estatus actual es: **Recibido**. Nos pondremos en contacto pronto.")
+            materiales_filtrados = df_mat_editado[df_mat_editado["Cantidad"] > 0]
+            cantidad_total = int(materiales_filtrados["Cantidad"].sum())
+
+            if not solicitado_por or not contacto_solicitante:
+                st.error("⚠️ Por favor completa los campos obligatorios: 'Solicitado por' y 'Número de contacto'.")
+            elif cantidad_total <= 0:
+                st.error("⚠️ Debes seleccionar al menos 1 material con cantidad mayor a 0.")
             else:
-                st.warning("Por favor completa todos los campos obligatorios.")
+                codigo_sol = f"POP-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                materiales_json = materiales_filtrados.to_json(orient="records", force_ascii=False)
+
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("""
+                        INSERT INTO solicitudes_v2 (
+                            codigo_solicitud, fecha_solicitud, solicitado_por, cargo_departamento,
+                            canal_area, tipo_solicitud, prioridad, fecha_entrega, contacto_solicitante,
+                            nombre_tienda, tienda_nueva, descripcion_evento, fechas_evento,
+                            aliado_comercial, nombre_promotor, zona_cobertura, activacion_asignada,
+                            objetivo_solicitud, detalle_adicional, estado_destino, ciudad_destino,
+                            oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
+                            cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
+                            horario_retiro, observaciones_entrega, cantidad_total, materiales_json, estatus
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        codigo_sol, str(fecha_solicitud), solicitado_por, cargo_departamento,
+                        canal_area, tipo_solicitud, prioridad, str(fecha_entrega), contacto_solicitante,
+                        nombre_tienda, tienda_nueva, descripcion_evento, fechas_evento,
+                        aliado_comercial, nombre_promotor, zona_cobertura, activacion_asignada,
+                        objetivo_solicitud, detalle_adicional, estado_destino, ciudad_destino,
+                        oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
+                        cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
+                        horario_retiro, observaciones_entrega, cantidad_total, materiales_json, "Recibido"
+                    ))
+                    conn.commit()
+
+                st.session_state.solicitud_enviada_ok = codigo_sol
+                st.rerun()
     st.stop()
 
-# Si no está autenticado para el panel interno
+# ==========================================
+# 3. LOGIN PARA EL EQUIPO INTERNO
+# ==========================================
 if not st.session_state.autenticado:
     st.title("🔒 Acceso Corporativo — Control POP Weppa")
     st.markdown("Inicia sesión utilizando tu **correo corporativo** (`@weppa.io`) o usuario `adm`.")
-    
+
     with st.form("login_form"):
         usuario = st.text_input("Correo o Usuario").strip().lower()
         clave = st.text_input("Contraseña", type="password")
         entrar = st.form_submit_button("Ingresar al Sistema")
-        
+
         if entrar:
             if usuario in USUARIOS_AUTORIZADOS and USUARIOS_AUTORIZADOS[usuario] == clave:
                 st.session_state.autenticado = True
@@ -109,7 +262,7 @@ if not st.session_state.autenticado:
     st.stop()
 
 # ==========================================
-# 3. FUNCIONES DE GESTIÓN INTERNA
+# 4. FUNCIONES DE GESTIÓN INTERNA
 # ==========================================
 def obtener_inventario():
     with sqlite3.connect(DB_PATH) as conn:
@@ -118,12 +271,12 @@ def obtener_inventario():
 
 def obtener_solicitudes():
     with sqlite3.connect(DB_PATH) as conn:
-        df = pd.read_sql_query("SELECT id, solicitante AS 'Solicitante', correo AS 'Correo', material AS 'Material', cantidad AS 'Cantidad', estatus AS 'Estatus', fecha AS 'Fecha' FROM solicitudes ORDER BY id DESC", conn)
+        df = pd.read_sql_query("SELECT * FROM solicitudes_v2 ORDER BY id DESC", conn)
     return df
 
 def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("UPDATE solicitudes SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
+        conn.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
         conn.commit()
 
 def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
@@ -131,7 +284,7 @@ def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
         cursor = conn.cursor()
         cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (producto,))
         res = cursor.fetchone()
-        
+
         if res is None:
             if tipo == "Entrada":
                 cursor.execute("INSERT INTO inventario (producto, categoria, cantidad, ubicacion) VALUES (?, ?, ?, ?)",
@@ -143,8 +296,8 @@ def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
             if nueva_cant < 0:
                 return False, f"Stock insuficiente. Disponible: {res[0]}."
             cursor.execute("UPDATE inventario SET cantidad = ?, ubicacion = ? WHERE producto = ?", (nueva_cant, ubicacion, producto))
-        
-        cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)", 
+
+        cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
                        (producto, tipo, cantidad, st.session_state.usuario_actual))
         conn.commit()
     return True, f"¡{tipo} de {cantidad} unidad(es) de '{producto}' registrada por {st.session_state.usuario_actual}!"
@@ -154,13 +307,13 @@ def cargar_masivo(df_subido, modo):
         cursor = conn.cursor()
         if modo == "Reemplazar todo el inventario":
             cursor.execute("DELETE FROM inventario")
-        
+
         for _, row in df_subido.iterrows():
             prod = str(row["Material"]).strip()
             cat = str(row.get("Categoría", "General")).strip()
             cant = int(row["Cantidad"])
             ubi = str(row.get("Ubicación", "Almacén Principal")).strip()
-            
+
             cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod,))
             existe = cursor.fetchone()
             if existe and modo == "Sumar al inventario actual":
@@ -171,7 +324,7 @@ def cargar_masivo(df_subido, modo):
         conn.commit()
 
 # ==========================================
-# 4. INTERFAZ DE ADMINISTRACIÓN / EQUIPO
+# 5. PANEL INTERNO DE ADMINISTRACIÓN
 # ==========================================
 with st.sidebar:
     st.write(f"👤 Conectado como:\n**{st.session_state.usuario_actual}**")
@@ -182,14 +335,81 @@ with st.sidebar:
 st.title("📦 Control de Material POP — Weppa (Panel Interno)")
 
 tabs = st.tabs([
-    "📊 Inventario Actual", 
     "📥 Solicitudes Externas",
-    "➕ Registro Individual", 
-    "📂 Cargar / Descargar Excel", 
+    "📊 Inventario Actual",
+    "➕ Registro Individual",
+    "📂 Cargar / Descargar Excel",
     "🤖 Asistente IA Weppa"
 ])
 
 with tabs[0]:
+    st.subheader("📥 Solicitudes de Material POP Recibidas")
+    df_sol = obtener_solicitudes()
+
+    if not df_sol.empty:
+        st.download_button(
+            label="⬇️ Descargar Reporte de Solicitudes (CSV)",
+            data=df_sol.drop(columns=["materiales_json"]).to_csv(index=False).encode("utf-8"),
+            file_name="solicitudes_pop_weppa.csv",
+            mime="text/csv"
+        )
+        st.divider()
+
+        for _, row in df_sol.iterrows():
+            titulo_exp = f"[{row['estatus'].upper()}] {row['codigo_solicitud']} — {row['solicitado_por']} | {row['tipo_solicitud']} ({row['cantidad_total']} piezas)"
+            with st.expander(titulo_exp):
+                col_i1, col_i2, col_i3 = st.columns(3)
+                with col_i1:
+                    st.markdown("**Información General**")
+                    st.write(f"📅 **Fecha solicitud:** {row['fecha_solicitud']}")
+                    st.write(f"📆 **Entrega requerida:** {row['fecha_entrega']}")
+                    st.write(f"👤 **Solicitante:** {row['solicitado_por']} ({row['cargo_departamento']})")
+                    st.write(f"📞 **Contacto:** {row['contacto_solicitante']}")
+                    st.write(f"🏢 **Canal/Área:** {row['canal_area']} | **Prioridad:** {row['prioridad']}")
+                with col_i2:
+                    st.markdown("**Tienda o Actividad**")
+                    st.write(f"🏪 **Tienda:** {row['nombre_tienda']} (Nueva: {row['tienda_nueva']})")
+                    st.write(f"🎪 **Evento:** {row['descripcion_evento']} ({row['fechas_evento']})")
+                    st.write(f"🤝 **Aliado:** {row['aliado_comercial']} | **Promotor:** {row['nombre_promotor']}")
+                    st.write(f"📍 **Zona:** {row['zona_cobertura']} | **Activación:** {row['activacion_asignada']}")
+                    st.write(f"🎯 **Objetivo:** {row['objetivo_solicitud']}")
+                    if row['detalle_adicional']:
+                        st.write(f"📝 **Detalle:** {row['detalle_adicional']}")
+                with col_i3:
+                    st.markdown("**Envío por Zoom**")
+                    st.write(f"🗺️ **Destino:** {row['estado_destino']}, {row['ciudad_destino']}")
+                    st.write(f"📦 **Oficina Zoom:** {row['oficina_zoom']}")
+                    st.write(f"🏠 **Dirección:** {row['direccion_localidad']} ({row['municipio']}, {row['parroquia']})")
+                    st.write(f"🪪 **Retira:** {row['nombre_retiro']} (CI: {row['cedula_retiro']})")
+                    st.write(f"📱 **Tel/Correo:** {row['telefono_retiro']} | {row['correo_retiro']}")
+                    st.write(f"🕒 **Horario/Ref:** {row['horario_retiro']} — {row['referencia_ubicacion']}")
+                    if row['observaciones_entrega']:
+                        st.write(f"🚚 **Obs. entrega:** {row['observaciones_entrega']}")
+
+                st.markdown("**Detalle de Materiales Solicitados**")
+                try:
+                    df_mats = pd.read_json(row["materiales_json"])
+                    st.dataframe(df_mats, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.write("Sin detalle de materiales.")
+
+                st.divider()
+                col_est1, col_est2 = st.columns([2, 1])
+                with col_est1:
+                    opciones_est = ["Recibido", "En espera pendiente", "Enviado"]
+                    idx_actual = opciones_est.index(row["estatus"]) if row["estatus"] in opciones_est else 0
+                    nuevo_est = st.selectbox("Actualizar estatus de la solicitud", opciones_est, index=idx_actual, key=f"sel_{row['id']}")
+                with col_est2:
+                    st.write("")
+                    st.write("")
+                    if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
+                        actualizar_estatus_solicitud(row["id"], nuevo_est)
+                        st.success(f"Estatus cambiado a '{nuevo_est}'")
+                        st.rerun()
+    else:
+        st.info("No hay solicitudes registradas todavía.")
+
+with tabs[1]:
     df = obtener_inventario()
     if not df.empty:
         col1, col2 = st.columns(2)
@@ -199,45 +419,18 @@ with tabs[0]:
     else:
         st.info("El inventario está vacío. Sube un archivo Excel/CSV o registra materiales.")
 
-with tabs[1]:
-    st.subheader("📥 Gestión de Solicitudes Recibidas")
-    st.markdown("Aquí puedes revisar las solicitudes que envían los usuarios externos y actualizar su estatus.")
-    
-    df_sol = obtener_solicitudes()
-    if not df_sol.empty:
-        for index, row in df_sol.iterrows():
-            with st.expander(f"Solicitud #{row['id']} — {row['Solicitante']} ({row['Material']})"):
-                st.write(f"📧 **Correo:** {row['Correo']}")
-                st.write(f"📦 **Material:** {row['Material']} (Cantidad: {row['Cantidad']})")
-                st.write(f"📅 **Fecha:** {row['Fecha']}")
-                st.write(f"📌 **Estatus Actual:** `{row['Estatus']}`")
-                
-                nuevo_estatus = st.selectbox(
-                    "Cambiar estatus", 
-                    ["Recibido", "En espera pendiente", "Enviado"], 
-                    index=["Recibido", "En espera pendiente", "Enviado"].index(row['Estatus']) if row['Estatus'] in ["Recibido", "En espera pendiente", "Enviado"] else 0,
-                    key=f"estatus_{row['id']}"
-                )
-                
-                if st.button(f"Actualizar Estatus #{row['id']}", key=f"btn_{row['id']}"):
-                    actualizar_estatus_solicitud(row['id'], nuevo_estatus)
-                    st.success(f"¡Estatus actualizado a '{nuevo_estatus}' con éxito!")
-                    st.rerun()
-    else:
-        st.info("No hay solicitudes externas registradas todavía.")
-
 with tabs[2]:
     st.subheader("Registrar Entrada o Salida")
     with st.form("form_pop"):
         col_a, col_b = st.columns(2)
         with col_a:
-            producto = st.text_input("Nombre del Material", placeholder="Ej: Franelas, Pop-sockets").strip()
+            producto = st.text_input("Nombre del Material", placeholder="Ej: Stand, Lanyards, Vasos térmicos").strip()
             categoria = st.selectbox("Categoría", ["Textil", "Papelería", "Accesorios", "Eventos", "Merchandising"])
             cantidad = st.number_input("Cantidad", min_value=1, step=1)
         with col_b:
             tipo = st.radio("Tipo de Operación", ["Entrada", "Salida"])
             ubicacion = st.text_input("Ubicación / Destino", value="Almacén Principal")
-        
+
         if st.form_submit_button("Guardar Movimiento"):
             if producto:
                 ok, msg = registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion)
@@ -254,12 +447,12 @@ with tabs[3]:
     df_export = obtener_inventario()
     if df_export.empty:
         df_export = pd.DataFrame({
-            "Material": ["Franelas Weppa", "Stickers Promocionales"],
-            "Categoría": ["Textil", "Papelería"],
-            "Cantidad": [50, 200],
+            "Material": ["Stand", "Lanyards"],
+            "Categoría": ["Eventos", "Accesorios"],
+            "Cantidad": [10, 200],
             "Ubicación": ["Caracas", "Lechería"]
         })
-    
+
     st.download_button(
         label="⬇️ Descargar Inventario / Plantilla (CSV)",
         data=df_export.to_csv(index=False).encode('utf-8'),
@@ -269,7 +462,7 @@ with tabs[3]:
     st.divider()
     archivo = st.file_uploader("Sube tu archivo de inventario (.xlsx o .csv)", type=["xlsx", "csv"])
     modo_carga = st.radio("¿Qué hacer con los datos subidos?", ["Sumar al inventario actual", "Reemplazar todo el inventario"])
-    
+
     if archivo is not None:
         try:
             df_subido = pd.read_csv(archivo) if archivo.name.endswith('.csv') else pd.read_excel(archivo)
@@ -286,8 +479,8 @@ with tabs[3]:
 
 with tabs[4]:
     st.subheader("💬 Asistente Logístico con IA (Gemini)")
-    st.markdown("Pregúntale al asistente sobre el stock disponible, qué materiales faltan o ideas logísticas para Weppa.")
-    
+    st.markdown("Pregúntale al asistente sobre el stock disponible o las solicitudes recibidas.")
+
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
@@ -295,19 +488,19 @@ with tabs[4]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    user_query = st.chat_input("Ej: ¿Qué material tiene menos stock?")
+    user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están pendientes?")
     if user_query:
         try:
             gemini_key = st.secrets["GEMINI_API_KEY"]
             genai.configure(api_key=gemini_key)
-            
+
             st.session_state.chat_history.append({"role": "user", "content": user_query})
             with st.chat_message("user"):
                 st.markdown(user_query)
-            
+
             df_actual = obtener_inventario()
-            datos_contexto = df_actual.to_string(index=False) if not df_actual.empty else "El inventario actual está vacío."
-            
+            datos_contexto = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
+
             model = genai.GenerativeModel('gemini-1.5-flash')
             prompt_completo = (
                 "Eres el asistente logístico experto de Material POP para Weppa. "
@@ -318,5 +511,7 @@ with tabs[4]:
             with st.chat_message("assistant"):
                 st.markdown(res.text)
             st.session_state.chat_history.append({"role": "assistant", "content": res.text})
+        except Exception:
+            st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
         except Exception as err:
             st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
