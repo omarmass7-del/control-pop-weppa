@@ -7,7 +7,7 @@ import streamlit as st
 from openai import OpenAI
 
 # ==========================================
-# 0. CONFIGURACIÓN DE ACCESO Y ESTILOS
+# 0. CONFIGURACIÓN DE ACCESO Y ARCHIVOS DE ESTILO
 # ==========================================
 USUARIOS_AUTORIZADOS = {
     "adm": "weppa2026",
@@ -15,6 +15,9 @@ USUARIOS_AUTORIZADOS = {
     "omar@weppa.io": "omar2026",
     "maribel@weppa.io": "maribel2026"
 }
+
+BANNER_PATH = "banner_weppa_custom.png"
+BACKGROUND_PATH = "background_weppa_custom.png"
 
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -54,28 +57,6 @@ st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wid
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
-
-if "color_primario" not in st.session_state:
-    st.session_state.color_primario = "#ff4b4b"
-
-if "mensaje_banner" not in st.session_state:
-    st.session_state.mensaje_banner = ""
-
-# Inyección de estilos CSS personalizados para elegancia visual
-st.markdown(f"""
-    <style>
-        .stButton>button {{
-            border-radius: 8px;
-            font-weight: 600;
-        }}
-        .metric-card {{
-            background-color: #1e1e1e;
-            padding: 15px;
-            border-radius: 10px;
-            border-left: 5px solid {st.session_state.color_primario};
-        }}
-    </style>
-""", unsafe_allow_html=True)
 
 # ==========================================
 # 1. BASE DE DATOS LOCAL (SQLite)
@@ -146,9 +127,25 @@ def init_db():
 
 init_db()
 
-# Mostrar Banner global si el adm lo configuró
-if st.session_state.mensaje_banner:
-    st.info(f"📢 **Aviso de Administración:** {st.session_state.mensaje_banner}")
+# Renderizar Banner Global si existe archivo personalizado
+if os.path.exists(BANNER_PATH):
+    st.image(BANNER_PATH, use_container_width=True)
+
+# Inyectar fondo personalizado si el administrador subió uno
+if os.path.exists(BACKGROUND_PATH):
+    import base64
+    with open(BACKGROUND_PATH, "rb") as f:
+        data_bg = base64.b64encode(f.read()).decode("utf-8")
+    st.markdown(f"""
+        <style>
+        .stApp {{
+            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("data:image/png;base64,{data_bg}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
 
 # ==========================================
 # 2. NAVEGACIÓN: FORMULARIO PÚBLICO VS EQUIPO
@@ -365,7 +362,7 @@ def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
                         cursor.execute("UPDATE inventario SET cantidad = ? WHERE producto = ?", (nuevo_stock, prod_nombre))
                     
                     cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
-                                   (prod_nombre, "Salida Automática (Solicitud Envíada)", cant_solicitada, st.session_state.usuario_actual))
+                                   (prod_nombre, "Salida Automática (Solicitud Enviada)", cant_solicitada, st.session_state.usuario_actual))
             except Exception as e:
                 st.error(f"Error descontando inventario: {e}")
 
@@ -422,22 +419,38 @@ def cargar_masivo(df_subido, modo):
 with st.sidebar:
     st.write(f"👤 Conectado como:\n**{st.session_state.usuario_actual}**")
     
-    # 🌟 SECCIÓN EXCLUSIVA DE PERSONALIZACIÓN PARA EL ADMINISTRADOR (adm) 🌟
+    # 🌟 GESTIÓN DE PERSONALIZACIÓN VISUAL (EXCLUSIVO PARA adm) 🌟
     if st.session_state.usuario_actual == "adm":
         st.divider()
-        st.markdown("### ⚙️ Panel de Administrador")
-        st.markdown("*(Personalización exclusiva para adm)*")
-        
-        nuevo_color = st.color_picker("Color Principal UI", value=st.session_state.color_primario)
-        if nuevo_color != st.session_state.color_primario:
-            st.session_state.color_primario = nuevo_color
+        st.markdown("### 🎨 Personalización Visual")
+        st.markdown("*(Visible para todo el equipo)*")
+
+        banner_subido = st.file_uploader("Subir Banner Superior", type=["png", "jpg", "jpeg"])
+        if banner_subido is not None:
+            with open(BANNER_PATH, "wb") as f:
+                f.write(banner_subido.getbuffer())
+            st.success("¡Banner actualizado con éxito!")
             st.rerun()
 
-        banner_input = st.text_input("Mensaje de Aviso Global", value=st.session_state.mensaje_banner)
-        if st.button("Actualizar Banner"):
-            st.session_state.mensaje_banner = banner_input
-            st.success("Banner actualizado.")
+        if os.path.exists(BANNER_PATH):
+            if st.button("🗑️ Eliminar Banner"):
+                os.remove(BANNER_PATH)
+                st.success("Banner eliminado.")
+                st.rerun()
+
+        st.markdown("---")
+        bg_subido = st.file_uploader("Subir Imagen de Fondo", type=["png", "jpg", "jpeg"])
+        if bg_subido is not None:
+            with open(BACKGROUND_PATH, "wb") as f:
+                f.write(bg_subido.getbuffer())
+            st.success("¡Fondo actualizado con éxito!")
             st.rerun()
+
+        if os.path.exists(BACKGROUND_PATH):
+            if st.button("🗑️ Eliminar Fondo"):
+                os.remove(BACKGROUND_PATH)
+                st.success("Fondo eliminado.")
+                st.rerun()
 
     st.divider()
     if st.button("Cerrar Sesión"):
