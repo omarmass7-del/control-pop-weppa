@@ -192,7 +192,7 @@ modo_vista = st.sidebar.radio(
 
 if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.title("📋 Solicitud de Material POP — Weppa")
-    st.markdown("Complete la información. Al seleccionar el **Estado de destino**, el sistema buscará las agencias de Zoom cargadas en el Excel para autocompletar la dirección, municipio y parroquia.")
+    st.markdown("Complete la información. Al seleccionar el **Estado de destino**, el sistema cargará automáticamente las agencias de Zoom y autocompletará la dirección, municipio y parroquia.")
 
     if "solicitud_enviada_ok" not in st.session_state:
         st.session_state.solicitud_enviada_ok = None
@@ -241,13 +241,14 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
 
         st.divider()
-        st.subheader("3. Envío por Zoom (Autocompletado Inteligente)")
+        st.subheader("3. Envío por Zoom (Autocompletado por Estado)")
         
-        # Carga del Excel de Agencias Zoom y normalización de columnas
+        # Carga del Excel de Agencias Zoom
         df_zoom_excel = pd.DataFrame()
         if os.path.exists(ZOOM_EXCEL_PATH):
             try:
                 df_zoom_excel = pd.read_excel(ZOOM_EXCEL_PATH)
+                # Normalizar nombres de columnas eliminando espacios y acentos básicos
                 df_zoom_excel.columns = [str(c).strip().lower() for c in df_zoom_excel.columns]
             except Exception as e:
                 st.error(f"Error al leer el Excel de Zoom: {e}")
@@ -264,42 +265,31 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             parroquia_val = ""
 
             if not df_zoom_excel.empty and estado_destino != "Seleccione un estado...":
-                # Detectar columnas dinámicamente
-                col_est = next((c for c in df_zoom_excel.columns if 'estado' in c or 'region' in c), None)
-                col_ag = next((c for c in df_zoom_excel.columns if any(k in c for k in ['agencia', 'oficina', 'sucursal', 'nombre', 'tienda'])), None)
-                col_cod = next((c for c in df_zoom_excel.columns if any(k in c for k in ['codigo', 'nro', 'id', 'num'])), None)
-                col_dir = next((c for c in df_zoom_excel.columns if any(k in c for k in ['direccion', 'dir', 'ubicacion', 'calle'])), None)
-                col_mun = next((c for c in df_zoom_excel.columns if 'municipio' in c or 'mun' in c), None)
-                col_par = next((c for c in df_zoom_excel.columns if 'parroquia' in c or 'par' in c), None)
-
-                # Si no encuentra columna 'estado' exacta pero hay datos, usa la primera columna como comodín
-                if not col_est and len(df_zoom_excel.columns) > 0:
-                    col_est = df_zoom_excel.columns[0]
-                if not col_ag and len(df_zoom_excel.columns) > 1:
-                    col_ag = df_zoom_excel.columns[1]
-
-                if col_est and col_ag:
-                    df_filtrado = df_zoom_excel[df_zoom_excel[col_est].astype(str).str.contains(estado_destino, case=False, na=False)]
-                    lista_agencias = df_filtrado[col_ag].dropna().astype(str).tolist()
+                # Filtrar filas del estado ('estado' exacto según tu Excel)
+                if 'estado' in df_zoom_excel.columns:
+                    df_filtrado = df_zoom_excel[df_zoom_excel['estado'].astype(str).str.strip().str.lower() == estado_destino.lower()]
                     
-                    if lista_agencias:
+                    if not df_filtrado.empty and 'agencia' in df_filtrado.columns:
+                        lista_agencias = df_filtrado['agencia'].dropna().astype(str).tolist()
                         opciones_agencia = ["Seleccione agencia Zoom..."] + lista_agencias + ["Otra agencia / A convenir"]
+                        
                         agencia_sel = st.selectbox("Agencia / Oficina Zoom *", opciones_agencia)
                         
                         if agencia_sel != "Seleccione agencia Zoom..." and agencia_sel != "Otra agencia / A convenir":
                             agencia_seleccionada = agencia_sel
-                            fila = df_filtrado[df_filtrado[col_ag].astype(str) == agencia_sel]
+                            fila = df_filtrado[df_filtrado['agencia'].astype(str) == agencia_sel]
                             if not fila.empty:
-                                if col_cod: codigo_agencia_val = str(fila.iloc[0][col_cod])
-                                if col_dir: direccion_localidad_val = str(fila.iloc[0][col_dir])
-                                if col_mun: municipio_val = str(fila.iloc[0][col_mun])
-                                if col_par: parroquia_val = str(fila.iloc[0][col_par])
+                                if 'codigo' in fila.columns: codigo_agencia_val = str(fila.iloc[0]['codigo'])
+                                if 'direccion' in fila.columns: direccion_localidad_val = str(fila.iloc[0]['direccion'])
+                                if 'municipio' in fila.columns: municipio_val = str(fila.iloc[0]['municipio'])
+                                if 'parroquia' in fila.columns: parroquia_val = str(fila.iloc[0]['parroquia'])
                         elif agencia_sel == "Otra agencia / A convenir":
                             agencia_seleccionada = st.text_input("Escriba el nombre de la agencia").strip()
                     else:
-                        st.info(f"No hay agencias en el Excel para {estado_destino}. Escríbala abajo:")
-                        agencia_seleccionada = st.text_input("Nombre de la agencia Zoom").strip()
+                        st.info(f"No hay agencias registradas para {estado_destino} en el Excel.")
+                        agencia_seleccionada = st.text_input("Agencia Zoom de destino").strip()
                 else:
+                    st.warning("⚠️ El Excel cargado no contiene la columna 'Estado'. Vuelva a subirlo con la columna 'Estado'.")
                     agencia_seleccionada = st.text_input("Agencia Zoom de destino").strip()
             else:
                 if estado_destino == "Seleccione un estado...":
@@ -552,7 +542,7 @@ with st.sidebar:
 
         st.divider()
         st.markdown("### 📦 Agencias Zoom (Excel)")
-        st.caption("Columnas en tu Excel: Estado, Agencia, Codigo, Direccion, Municipio, Parroquia")
+        st.caption("Tu Excel ya es compatible con: Estado, Agencia, Codigo, Direccion, Municipio, Parroquia")
         zoom_subido = st.file_uploader("Actualizar Excel Zoom", type=["xlsx", "csv"])
         if zoom_subido is not None:
             try:
