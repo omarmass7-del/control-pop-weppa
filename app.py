@@ -163,7 +163,56 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             with tel_c1:
                 prefijo_sol = st.selectbox("Prefijo *", PREFIJOS_TELEFONO, key="pref_sol")
             with tel_c2:
-            
+                num_sol = st.text_input("Número de contacto *", placeholder="1234567").strip()
+            contacto_solicitante = f"{prefijo_sol}-{num_sol}" if num_sol else ""
+
+        st.divider()
+        st.subheader("2. Tienda o actividad")
+        t1, t2 = st.columns(2)
+        with t1:
+            nombre_tienda = st.text_input("Nombre de la tienda").strip()
+            tienda_nueva = st.selectbox("¿Es tienda nueva?", ["No", "Sí"])
+            descripcion_evento = st.text_input("Si es para un evento indique de qué se trata").strip()
+            fechas_evento = st.text_input("Fecha o fechas del evento").strip()
+            aliado_comercial = st.text_input("Aliado comercial involucrado").strip()
+        with t2:
+            nombre_promotor = st.text_input("Si es para un promotor indique su nombre").strip()
+            zona_cobertura = st.text_input("Zona que cubre").strip()
+            activacion_asignada = st.text_input("Evento o activación asignada").strip()
+            objetivo_solicitud = st.text_input("Objetivo de la solicitud").strip()
+            detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
+
+        st.divider()
+        st.subheader("3. Envío por Zoom")
+        z1, z2, z3 = st.columns(3)
+        with z1:
+            estado_destino = st.selectbox("Estado de destino", ESTADOS_VENEZUELA)
+            ciudad_destino = st.text_input("Ciudad de destino").strip()
+            oficina_zoom = st.text_input("Oficina Zoom de destino").strip()
+            direccion_localidad = st.text_input("Dirección o localidad").strip()
+        with z2:
+            municipio = st.text_input("Municipio").strip()
+            parroquia = st.text_input("Parroquia").strip()
+            nombre_retiro = st.text_input("Nombre de quien retirará").strip()
+            ci_c1, ci_c2 = st.columns([1, 2])
+            with ci_c1:
+                tipo_ci = st.selectbox("Tipo", ["V-", "E-", "J-"], key="tipo_ci")
+            with ci_c2:
+                num_ci = st.text_input("Cédula", placeholder="12345678").strip()
+            cedula_retiro = f"{tipo_ci}{num_ci}" if num_ci else ""
+        with z3:
+            tret_c1, tret_c2 = st.columns([1, 2])
+            with tret_c1:
+                prefijo_ret = st.selectbox("Prefijo", PREFIJOS_TELEFONO, key="pref_ret")
+            with tret_c2:
+                num_ret = st.text_input("Teléfono (retiro)", placeholder="1234567").strip()
+            telefono_retiro = f"{prefijo_ret}-{num_ret}" if num_ret else ""
+            correo_retiro = st.text_input("Correo electrónico (retiro)").strip()
+            referencia_ubicacion = st.text_input("Referencia de ubicación").strip()
+            horario_retiro = st.text_input("Horario estimado de retiro").strip()
+        observaciones_entrega = st.text_area("Observaciones de entrega", height=68).strip()
+
+        st.
             st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
         except Exception as err:
             st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
