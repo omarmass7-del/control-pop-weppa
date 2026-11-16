@@ -35,63 +35,6 @@ ESTADOS_VENEZUELA = [
     "Sucre", "Táchira", "Trujillo", "Yaracuy", "Zulia"
 ]
 
-# Función para obtener la lista de oficinas Zoom (dinámica desde el Excel del adm o lista base)
-def obtener_sucursales_zoom():
-    if os.path.exists(ZOOM_EXCEL_PATH):
-        try:
-            df_zoom = pd.read_excel(ZOOM_EXCEL_PATH)
-            # Buscar la columna que contenga las agencias
-            columna_agencia = None
-            for col in df_zoom.columns:
-                if any(k in col.lower() for k in ["agencia", "oficina", "sucursal", "zoom", "nombre"]):
-                    columna_agencia = col
-                    break
-            if columna_agencia is None and not df_zoom.empty:
-                columna_agencia = df_zoom.columns[0]
-            
-            if columna_agencia:
-                lista_cargada = df_zoom[columna_agencia].dropna().astype(str).tolist()
-                if lista_cargada:
-                    return ["Seleccione oficina Zoom..."] + lista_cargada
-        except Exception:
-            pass
-
-    # Lista por defecto si el adm no ha subido un Excel personalizado
-    return [
-        "Seleccione oficina Zoom...",
-        "Zoom - Caracas (Av. Victoria)",
-        "Zoom - Caracas (Altamira Sur)",
-        "Zoom - Caracas (La Candelaria / Centro)",
-        "Zoom - Caracas (Chacao)",
-        "Zoom - Caracas (El Marqués)",
-        "Zoom - Caracas (Catia)",
-        "Zoom - Miranda (Guarenas / 27 de Febrero)",
-        "Zoom - Miranda (Los Teques)",
-        "Zoom - Miranda (Guatire)",
-        "Zoom - La Guaira (Maiquetía)",
-        "Zoom - Carabobo (Valencia / C.C. San Andrésito)",
-        "Zoom - Carabobo (Naguanagua)",
-        "Zoom - Aragua (Maracay / Torre Sindoni)",
-        "Zoom - Aragua (Cagua - Calle Comercio)",
-        "Zoom - Anzoátegui (Puerto La Cruz - Hotel Rasil)",
-        "Zoom - Anzoátegui (Barcelona - Amana)",
-        "Zoom - Anzoátegui (Lechería - C.C. Mercado La Isla)",
-        "Zoom - Anzoátegui (Anaco Centro)",
-        "Zoom - Anzoátegui (El Tigre - C.C. Alba)",
-        "Zoom - Zulia (Maracaibo - 18 de Octubre)",
-        "Zoom - Zulia (Maracaibo - Amparo)",
-        "Zoom - Zulia (Maracaibo - Bella Vista)",
-        "Zoom - Lara (Barquisimeto - Aeropuerto Jacinto Lara)",
-        "Zoom - Táchira (San Cristóbal - 7ma Avenida)",
-        "Zoom - Mérida (Santa Elena de Arenales)",
-        "Zoom - Bolívar (Puerto Ordaz - C.C. Plaza Atlántico)",
-        "Zoom - Bolívar (Ciudad Bolívar - Hangar Distribuidora)",
-        "Zoom - Nueva Esparta (Porlamar - Villa Rosa)",
-        "Zoom - Portuguesa (Acarigua - C.C. Páez)",
-        "Zoom - Apure (Achaguas)",
-        "Otra agencia Zoom / Destino Nacional a convenir"
-    ]
-
 PREFIJOS_TELEFONO = ["0412", "0414", "0424", "0416", "0426", "0212", "Otro"]
 
 CATALOGO_MATERIALES_BASE = [
@@ -249,7 +192,7 @@ modo_vista = st.sidebar.radio(
 
 if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.title("📋 Solicitud de Material POP — Weppa")
-    st.markdown("Complete cuidadosamente las secciones del formulario, seleccione la agencia de Zoom oficial y las cantidades requeridas.")
+    st.markdown("Complete la información. Al seleccionar el **Estado de destino**, el sistema filtrará y autocompletará la agencia Zoom, código, dirección, municipio y parroquia.")
 
     if "solicitud_enviada_ok" not in st.session_state:
         st.session_state.solicitud_enviada_ok = None
@@ -298,19 +241,77 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
 
         st.divider()
-        st.subheader("3. Envío por Zoom (Red de Oficinas Actualizada)")
+        st.subheader("3. Envío por Zoom (Autocompletado Inteligente por Estado)")
+        
+        # Lógica para leer el Excel subido por el admin y filtrar dinámicamente
+        df_zoom_excel = pd.DataFrame()
+        if os.path.exists(ZOOM_EXCEL_PATH):
+            try:
+                df_zoom_excel = pd.read_excel(ZOOM_EXCEL_PATH)
+            except Exception:
+                pass
+
         z1, z2, z3 = st.columns(3)
         with z1:
-            estado_destino = st.selectbox("Estado de destino", ESTADOS_VENEZUELA)
+            estado_destino = st.selectbox("Estado de destino *", ESTADOS_VENEZUELA)
             ciudad_destino = st.text_input("Ciudad de destino").strip()
-            # Selector dinámico cargado desde el archivo Excel del administrador
-            lista_oficinas_actual = obtener_sucursales_zoom()
-            oficina_zoom = st.selectbox("Agencia / Oficina Zoom de destino *", lista_oficinas_actual)
+
+            # Filtrar agencias según el estado seleccionado
+            agencia_seleccionada = "Otra agencia / A convenir"
+            codigo_agencia_val = ""
+            direccion_localidad_val = ""
+            municipio_val = ""
+            parroquia_val = ""
+
+            if not df_zoom_excel.empty and estado_destino != "Seleccione un estado...":
+                # Normalizar nombres de columnas del excel para encontrarlas sin importar mayúsculas
+                df_zoom_excel.columns = [str(c).strip().lower() for c in df_zoom_excel.columns]
+                
+                # Buscar columnas clave en el Excel del adm
+                col_est = next((c for c in df_zoom_excel.columns if 'estado' in c), None)
+                col_ag = next((c for c in df_zoom_excel.columns if any(k in c for k in ['agencia', 'oficina', 'sucursal', 'nombre'])), None)
+                col_cod = next((c for c in df_zoom_excel.columns if any(k in c for k in ['codigo', 'nro', 'id'])), None)
+                col_dir = next((c for c in df_zoom_excel.columns if any(k in c for k in ['direccion', 'dir', 'ubicacion'])), None)
+                col_mun = next((c for c in df_zoom_excel.columns if 'municipio' in c), None)
+                col_par = next((c for c in df_zoom_excel.columns if 'parroquia' in c), None)
+
+                if col_est and col_ag:
+                    # Filtrar filas del estado
+                    df_filtrado = df_zoom_excel[df_zoom_excel[col_est].astype(str).str.contains(estado_destino, case=False, na=False)]
+                    lista_agencias = df_filtrado[col_ag].dropna().astype(str).tolist()
+                    
+                    if lista_agencias:
+                        opciones_agencia_sel = ["Seleccione agencia Zoom..."] + lista_agencias + ["Otra agencia / A convenir"]
+                        agencia_sel_form = st.selectbox("Agencia / Oficina Zoom *", opciones_agencia_sel)
+                        
+                        if agencia_sel_form != "Seleccione agencia Zoom..." and agencia_sel_form != "Otra agencia / A convenir":
+                            agencia_seleccionada = agencia_sel_form
+                            # Extraer datos automáticos de la fila seleccionada
+                            fila_agencia = df_filtrado[df_filtrado[col_ag].astype(str) == agencia_sel_form]
+                            if not fila_agencia.empty:
+                                if col_cod: codigo_agencia_val = str(fila_agencia.iloc[0][col_cod])
+                                if col_dir: direccion_localidad_val = str(fila_agencia.iloc[0][col_dir])
+                                if col_mun: municipio_val = str(fila_agencia.iloc[0][col_mun])
+                                if col_par: parroquia_val = str(fila_agencia.iloc[0][col_par])
+                    else:
+                        st.info(f"No hay agencias cargadas en el Excel para {estado_destino}. Puede escribir abajo.")
+                        agencia_seleccionada = st.text_input("Nombre de agencia Zoom").strip()
+                else:
+                    st.warning("⚠️ El Excel cargado por el adm debe tener columnas como 'Estado' y 'Agencia'.")
+                    agencia_seleccionada = st.text_input("Agencia Zoom de destino").strip()
+            else:
+                if estado_destino == "Seleccione un estado...":
+                    st.caption("👈 Primero seleccione un estado para ver sus agencias Zoom.")
+                agencia_seleccionada = st.text_input("Agencia Zoom de destino").strip()
+
+            oficina_zoom = f"{agencia_seleccionada} (Cod: {codigo_agencia_val})" if codigo_agencia_val else agencia_seleccionada
+
         with z2:
-            direccion_localidad = st.text_input("Dirección o localidad").strip()
-            municipio = st.text_input("Municipio").strip()
-            parroquia = st.text_input("Parroquia").strip()
+            direccion_localidad = st.text_input("Dirección o localidad", value=direccion_localidad_val).strip()
+            municipio = st.text_input("Municipio", value=municipio_val).strip()
+            parroquia = st.text_input("Parroquia", value=parroquia_val).strip()
             nombre_retiro = st.text_input("Nombre de quien retirará").strip()
+
         with z3:
             ci_c1, ci_c2 = st.columns([1, 2])
             with ci_c1:
@@ -364,8 +365,8 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
 
             if not solicitado_por or not num_sol:
                 st.error("⚠️ Por favor complete los campos obligatorios: 'Solicitado por' y 'Número de contacto'.")
-            elif oficina_zoom == "Seleccione oficina Zoom...":
-                st.error("⚠️ Por favor seleccione una agencia o oficina Zoom válida.")
+            elif estado_destino == "Seleccione un estado...":
+                st.error("⚠️ Por favor seleccione un estado de destino.")
             elif cantidad_total <= 0:
                 st.error("⚠️ Debe seleccionar al menos 1 material con cantidad mayor a 0.")
             else:
@@ -551,20 +552,21 @@ with st.sidebar:
 
         st.divider()
         st.markdown("### 📦 Agencias Zoom (Excel)")
-        zoom_subido = st.file_uploader("Actualizar Lista Zoom (.xlsx)", type=["xlsx", "csv"])
+        st.caption("Columnas recomendadas en tu Excel: Estado, Agencia, Codigo, Direccion, Municipio, Parroquia")
+        zoom_subido = st.file_uploader("Actualizar Excel Zoom", type=["xlsx", "csv"])
         if zoom_subido is not None:
             try:
                 df_z = pd.read_csv(zoom_subido) if zoom_subido.name.endswith('.csv') else pd.read_excel(zoom_subido)
                 df_z.to_excel(ZOOM_EXCEL_PATH, index=False)
-                st.success("¡Lista de agencias Zoom actualizada!")
+                st.success("¡Excel de agencias Zoom cargado con éxito!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error procesando el archivo: {e}")
 
         if os.path.exists(ZOOM_EXCEL_PATH):
-            if st.button("🔄 Restablecer Lista Zoom Original"):
+            if st.button("🗑️ Eliminar Excel Zoom"):
                 os.remove(ZOOM_EXCEL_PATH)
-                st.success("Lista restablecida.")
+                st.success("Excel Zoom eliminado.")
                 st.rerun()
 
     st.divider()
