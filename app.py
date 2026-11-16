@@ -154,7 +154,7 @@ else:
 st.markdown(f"""
     <style>
         {bg_css}
-        .stExpander, .stForm, div[data-testid="stVerticalBlock"] > div > div.stTextInput, div[data-testid="stSelectbox"] {{
+        .stExpander, div[data-testid="stVerticalBlock"] > div > div.stTextInput, div[data-testid="stSelectbox"] {{
             background-color: rgba(25, 25, 25, 0.85);
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.15);
@@ -188,7 +188,7 @@ modo_vista = st.sidebar.radio(
 
 if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.title("📋 Solicitud de Material POP — Weppa")
-    st.markdown("Complete la información. Al seleccionar el **Estado**, el sistema cargará automáticamente las agencias y rellenará la dirección, código, municipio y parroquia.")
+    st.markdown("Complete la información. Al seleccionar el **Estado** y la **Agencia**, los campos de dirección, municipio, parroquia y código se rellenarán automáticamente.")
 
     if "solicitud_enviada_ok" not in st.session_state:
         st.session_state.solicitud_enviada_ok = None
@@ -200,7 +200,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             st.rerun()
         st.stop()
 
-    # Callback para autocompletar al cambiar de agencia seleccionada
+    # Callback para autocompletar datos al cambiar la agencia
     def actualizar_datos_agencia():
         agencia_elegida = st.session_state.get("sel_agencia_zoom", "")
         estado_actual = st.session_state.get("sel_estado_destino", "Seleccione un estado...")
@@ -210,7 +210,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
                 df_z = pd.read_excel(ZOOM_EXCEL_PATH)
                 df_z.columns = [str(c).strip() for c in df_z.columns]
                 
-                # Filtrar por estado y agencia
                 df_filtro = df_z[(df_z['Estado'].astype(str).str.strip().str.lower() == estado_actual.lower()) & 
                                  (df_z['Agencia'].astype(str).str.strip() == agencia_elegida)]
                 
@@ -226,163 +225,161 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             except Exception:
                 pass
 
-    with st.form("form_solicitud_pop_weppa"):
-        st.subheader("1. Información general")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            fecha_solicitud = st.date_input("Fecha de solicitud", value=date.today())
-            solicitado_por = st.text_input("Solicitado por *").strip()
-            cargo_departamento = st.text_input("Cargo o departamento").strip()
-        with c2:
-            canal_area = st.text_input("Canal o área").strip()
-            tipo_solicitud = st.selectbox("Tipo de solicitud", ["Tienda", "Evento", "Promotor(a)"])
-            prioridad = st.selectbox("Prioridad", ["Alta", "Media", "Baja"], index=1)
-        with c3:
-            fecha_entrega = st.date_input("Fecha requerida de entrega", value=date.today())
-            tel_c1, tel_c2 = st.columns([1, 2])
-            with tel_c1:
-                prefijo_sol = st.selectbox("Prefijo *", PREFIJOS_TELEFONO, key="pref_sol")
-            with tel_c2:
-                num_sol = st.text_input("Número de contacto *", placeholder="1234567").strip()
-            contacto_solicitante = f"{prefijo_sol}-{num_sol}" if num_sol else ""
+    st.subheader("1. Información general")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        fecha_solicitud = st.date_input("Fecha de solicitud", value=date.today())
+        solicitado_por = st.text_input("Solicitado por *").strip()
+        cargo_departamento = st.text_input("Cargo o departamento").strip()
+    with c2:
+        canal_area = st.text_input("Canal o área").strip()
+        tipo_solicitud = st.selectbox("Tipo de solicitud", ["Tienda", "Evento", "Promotor(a)"])
+        prioridad = st.selectbox("Prioridad", ["Alta", "Media", "Baja"], index=1)
+    with c3:
+        fecha_entrega = st.date_input("Fecha requerida de entrega", value=date.today())
+        tel_c1, tel_c2 = st.columns([1, 2])
+        with tel_c1:
+            prefijo_sol = st.selectbox("Prefijo *", PREFIJOS_TELEFONO, key="pref_sol")
+        with tel_c2:
+            num_sol = st.text_input("Número de contacto *", placeholder="1234567").strip()
+        contacto_solicitante = f"{prefijo_sol}-{num_sol}" if num_sol else ""
 
-        st.divider()
-        st.subheader("2. Tienda o actividad")
-        t1, t2 = st.columns(2)
-        with t1:
-            nombre_tienda = st.text_input("Nombre de la tienda").strip()
-            tienda_nueva = st.selectbox("¿Es tienda nueva?", ["No", "Sí"])
-            descripcion_evento = st.text_input("Si es para un evento indique de qué se trata").strip()
-            fechas_evento = st.text_input("Fecha o fechas del evento").strip()
-            aliado_comercial = st.text_input("Aliado comercial involucrado").strip()
-        with t2:
-            nombre_promotor = st.text_input("Si es para un promotor indique su nombre").strip()
-            zona_cobertura = st.text_input("Zona que cubre").strip()
-            activacion_asignada = st.text_input("Evento o activación asignada").strip()
-            objetivo_solicitud = st.text_input("Objetivo de la solicitud").strip()
-            detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
+    st.divider()
+    st.subheader("2. Tienda o actividad")
+    t1, t2 = st.columns(2)
+    with t1:
+        nombre_tienda = st.text_input("Nombre de la tienda").strip()
+        tienda_nueva = st.selectbox("¿Es tienda nueva?", ["No", "Sí"])
+        descripcion_evento = st.text_input("Si es para un evento indique de qué se trata").strip()
+        fechas_evento = st.text_input("Fecha o fechas del evento").strip()
+        aliado_comercial = st.text_input("Aliado comercial involucrado").strip()
+    with t2:
+        nombre_promotor = st.text_input("Si es para un promotor indique su nombre").strip()
+        zona_cobertura = st.text_input("Zona que cubre").strip()
+        activacion_asignada = st.text_input("Evento o activación asignada").strip()
+        objetivo_solicitud = st.text_input("Objetivo de la solicitud").strip()
+        detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
 
-        st.divider()
-        st.subheader("3. Envío por Zoom (Autocompletado Automático)")
-        
-        # Leer Excel de agencias
-        df_zoom_excel = pd.DataFrame()
-        if os.path.exists(ZOOM_EXCEL_PATH):
-            try:
-                df_zoom_excel = pd.read_excel(ZOOM_EXCEL_PATH)
-                df_zoom_excel.columns = [str(c).strip() for c in df_zoom_excel.columns]
-            except Exception:
-                pass
+    st.divider()
+    st.subheader("3. Envío por Zoom (Autocompletado Automático)")
+    
+    # Leer Excel de agencias
+    df_zoom_excel = pd.DataFrame()
+    if os.path.exists(ZOOM_EXCEL_PATH):
+        try:
+            df_zoom_excel = pd.read_excel(ZOOM_EXCEL_PATH)
+            df_zoom_excel.columns = [str(c).strip() for c in df_zoom_excel.columns]
+        except Exception:
+            pass
 
-        z1, z2, z3 = st.columns(3)
-        with z1:
-            estado_destino = st.selectbox("Estado de destino *", ESTADOS_VENEZUELA, key="sel_estado_destino")
-            ciudad_destino = st.text_input("Ciudad de destino").strip()
+    z1, z2, z3 = st.columns(3)
+    with z1:
+        estado_destino = st.selectbox("Estado de destino *", ESTADOS_VENEZUELA, key="sel_estado_destino")
+        ciudad_destino = st.text_input("Ciudad de destino").strip()
 
-            lista_agencias = []
-            if not df_zoom_excel.empty and estado_destino != "Seleccione un estado...":
-                if 'Estado' in df_zoom_excel.columns and 'Agencia' in df_zoom_excel.columns:
-                    df_fil = df_zoom_excel[df_zoom_excel['Estado'].astype(str).str.strip().str.lower() == estado_destino.lower()]
-                    lista_agencias = df_fil['Agencia'].dropna().astype(str).tolist()
+        lista_agencias = []
+        if not df_zoom_excel.empty and estado_destino != "Seleccione un estado...":
+            if 'Estado' in df_zoom_excel.columns and 'Agencia' in df_zoom_excel.columns:
+                df_fil = df_zoom_excel[df_zoom_excel['Estado'].astype(str).str.strip().str.lower() == estado_destino.lower()]
+                lista_agencias = df_fil['Agencia'].dropna().astype(str).tolist()
 
-            if lista_agencias:
-                agencia_sel = st.selectbox("Agencia / Oficina Zoom *", ["Seleccione agencia Zoom..."] + lista_agencias, key="sel_agencia_zoom", on_change=actualizar_datos_agencia)
-            else:
-                agencia_sel = st.text_input("Agencia Zoom de destino *").strip()
+        if lista_agencias:
+            agencia_sel = st.selectbox("Agencia / Oficina Zoom *", ["Seleccione agencia Zoom..."] + lista_agencias, key="sel_agencia_zoom", on_change=actualizar_datos_agencia)
+        else:
+            agencia_sel = st.text_input("Agencia Zoom de destino *").strip()
 
-            oficina_zoom = st.session_state.get("input_oficina_completa", agencia_sel if isinstance(agencia_sel, str) else "")
+        oficina_zoom = st.session_state.get("input_oficina_completa", agencia_sel if isinstance(agencia_sel, str) else "")
 
-        with z2:
-            direccion_localidad = st.text_input("Dirección o localidad", value=st.session_state.get("input_dir", "")).strip()
-            municipio = st.text_input("Municipio", value=st.session_state.get("input_mun", "")).strip()
-            parroquia = st.text_input("Parroquia", value=st.session_state.get("input_par", "")).strip()
-            nombre_retiro = st.text_input("Nombre de quien retirará").strip()
+    with z2:
+        direccion_localidad = st.text_input("Dirección o localidad", value=st.session_state.get("input_dir", "")).strip()
+        municipio = st.text_input("Municipio", value=st.session_state.get("input_mun", "")).strip()
+        parroquia = st.text_input("Parroquia", value=st.session_state.get("input_par", "")).strip()
+        nombre_retiro = st.text_input("Nombre de quien retirará").strip()
 
-        with z3:
-            ci_c1, ci_c2 = st.columns([1, 2])
-            with ci_c1:
-                tipo_ci = st.selectbox("Tipo CI", ["V-", "E-", "J-"], key="tipo_ci")
-            with ci_c2:
-                num_ci = st.text_input("Cédula de retiro", placeholder="12345678").strip()
-            cedula_retiro = f"{tipo_ci}{num_ci}" if num_ci else ""
+    with z3:
+        ci_c1, ci_c2 = st.columns([1, 2])
+        with ci_c1:
+            tipo_ci = st.selectbox("Tipo CI", ["V-", "E-", "J-"], key="tipo_ci")
+        with ci_c2:
+            num_ci = st.text_input("Cédula de retiro", placeholder="12345678").strip()
+        cedula_retiro = f"{tipo_ci}{num_ci}" if num_ci else ""
 
-            tret_c1, tret_c2 = st.columns([1, 2])
-            with tret_c1:
-                prefijo_ret = st.selectbox("Prefijo", PREFIJOS_TELEFONO, key="pref_ret")
-            with tret_c2:
-                num_ret = st.text_input("Teléfono retiro", placeholder="1234567").strip()
-            telefono_retiro = f"{prefijo_ret}-{num_ret}" if num_ret else ""
-            correo_retiro = st.text_input("Correo electrónico (retiro)").strip()
-            referencia_ubicacion = st.text_input("Referencia de ubicación").strip()
-            horario_retiro = st.text_input("Horario estimado de retiro").strip()
+        tret_c1, tret_c2 = st.columns([1, 2])
+        with tret_c1:
+            prefijo_ret = st.selectbox("Prefijo", PREFIJOS_TELEFONO, key="pref_ret")
+        with tret_c2:
+            num_ret = st.text_input("Teléfono retiro", placeholder="1234567").strip()
+        telefono_retiro = f"{prefijo_ret}-{num_ret}" if num_ret else ""
+        correo_retiro = st.text_input("Correo electrónico (retiro)").strip()
+        referencia_ubicacion = st.text_input("Referencia de ubicación").strip()
+        horario_retiro = st.text_input("Horario estimado de retiro").strip()
 
-        observaciones_entrega = st.text_area("Observaciones de entrega", height=68).strip()
+    observaciones_entrega = st.text_area("Observaciones de entrega", height=68).strip()
 
-        st.divider()
-        st.subheader("4. Materiales solicitados")
-        df_mat_template = pd.DataFrame(CATALOGO_MATERIALES_BASE)
-        df_mat_editado = st.data_editor(
-            df_mat_template,
-            use_container_width=True,
-            hide_index=True,
-            disabled=["Material_ID", "Material"],
-            column_config={
-                "Material_ID": st.column_config.TextColumn("ID"),
-                "Material": st.column_config.TextColumn("Material"),
-                "Cantidad": st.column_config.SelectboxColumn(
-                    "Cantidad",
-                    options=OPCIONES_CANTIDAD,
-                    default=0,
-                    required=True
-                ),
-                "Medidas_especificaciones": st.column_config.TextColumn("Medidas / Especificaciones"),
-                "Observaciones": st.column_config.TextColumn("Observaciones")
-            }
-        )
+    st.divider()
+    st.subheader("4. Materiales solicitados")
+    st.caption("Haga clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas.")
+    df_mat_template = pd.DataFrame(CATALOGO_MATERIALES_BASE)
+    df_mat_editado = st.data_editor(
+        df_mat_template,
+        use_container_width=True,
+        hide_index=True,
+        disabled=["Material_ID", "Material"],
+        column_config={
+            "Material_ID": st.column_config.TextColumn("ID"),
+            "Material": st.column_config.TextColumn("Material"),
+            "Cantidad": st.column_config.SelectboxColumn(
+                "Cantidad",
+                options=OPCIONES_CANTIDAD,
+                default=0,
+                required=True
+            ),
+            "Medidas_especificaciones": st.column_config.TextColumn("Medidas / Especificaciones"),
+            "Observaciones": st.column_config.TextColumn("Observaciones")
+        }
+    )
 
-        enviar_form = st.form_submit_button("📤 Enviar Solicitud POP")
+    if st.button("📤 Enviar Solicitud POP"):
+        materiales_filtrados = df_mat_editado[df_mat_editado["Cantidad"] > 0]
+        cantidad_total = int(materiales_filtrados["Cantidad"].sum())
+        estado_final = "" if estado_destino == "Seleccione un estado..." else estado_destino
 
-        if enviar_form:
-            materiales_filtrados = df_mat_editado[df_mat_editado["Cantidad"] > 0]
-            cantidad_total = int(materiales_filtrados["Cantidad"].sum())
-            estado_final = "" if estado_destino == "Seleccione un estado..." else estado_destino
+        if not solicitado_por or not num_sol:
+            st.error("⚠️ Complete 'Solicitado por' y 'Número de contacto'.")
+        elif estado_destino == "Seleccione un estado...":
+            st.error("⚠️ Seleccione un estado de destino.")
+        elif cantidad_total <= 0:
+            st.error("⚠️ Debe seleccionar al menos 1 material.")
+        else:
+            codigo_sol = f"POP-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            materiales_json = materiales_filtrados.to_json(orient="records", force_ascii=False)
 
-            if not solicitado_por or not num_sol:
-                st.error("⚠️ Complete 'Solicitado por' y 'Número de contacto'.")
-            elif estado_destino == "Seleccione un estado...":
-                st.error("⚠️ Seleccione un estado de destino.")
-            elif cantidad_total <= 0:
-                st.error("⚠️ Debe seleccionar al menos 1 material.")
-            else:
-                codigo_sol = f"POP-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-                materiales_json = materiales_filtrados.to_json(orient="records", force_ascii=False)
-
-                with sqlite3.connect(DB_PATH) as conn:
-                    conn.execute("""
-                        INSERT INTO solicitudes_v2 (
-                            codigo_solicitud, fecha_solicitud, solicitado_por, cargo_departamento,
-                            canal_area, tipo_solicitud, prioridad, fecha_entrega, contacto_solicitante,
-                            nombre_tienda, tienda_nueva, descripcion_evento, fechas_evento,
-                            aliado_comercial, nombre_promotor, zona_cobertura, activacion_asignada,
-                            objetivo_solicitud, detalle_adicional, estado_destino, ciudad_destino,
-                            oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
-                            cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
-                            horario_retiro, observaciones_entrega, cantidad_total, materiales_json, estatus
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        codigo_sol, str(fecha_solicitud), solicitado_por, cargo_departamento,
-                        canal_area, tipo_solicitud, prioridad, str(fecha_entrega), contacto_solicitante,
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("""
+                    INSERT INTO solicitudes_v2 (
+                        codigo_solicitud, fecha_solicitud, solicitado_por, cargo_departamento,
+                        canal_area, tipo_solicitud, prioridad, fecha_entrega, contacto_solicitante,
                         nombre_tienda, tienda_nueva, descripcion_evento, fechas_evento,
                         aliado_comercial, nombre_promotor, zona_cobertura, activacion_asignada,
-                        objetivo_solicitud, detalle_adicional, estado_final, ciudad_destino,
+                        objetivo_solicitud, detalle_adicional, estado_destino, ciudad_destino,
                         oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
                         cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
-                        horario_retiro, observaciones_entrega, cantidad_total, materiales_json, "Recibido"
-                    ))
-                    conn.commit()
+                        horario_retiro, observaciones_entrega, cantidad_total, materiales_json, estatus
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    codigo_sol, str(fecha_solicitud), solicitado_por, cargo_departamento,
+                    canal_area, tipo_solicitud, prioridad, str(fecha_entrega), contacto_solicitante,
+                    nombre_tienda, tienda_nueva, descripcion_evento, fechas_evento,
+                    aliado_comercial, nombre_promotor, zona_cobertura, activacion_asignada,
+                    objetivo_solicitud, detalle_adicional, estado_final, ciudad_destino,
+                    oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
+                    cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
+                    horario_retiro, observaciones_entrega, cantidad_total, materiales_json, "Recibido"
+                ))
+                conn.commit()
 
-                st.session_state.solicitud_enviada_ok = codigo_sol
-                st.rerun()
+            st.session_state.solicitud_enviada_ok = codigo_sol
+            st.rerun()
     st.stop()
 
 # ==========================================
