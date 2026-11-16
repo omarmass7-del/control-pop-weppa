@@ -639,3 +639,5 @@ with tabs[4]:
             cargar_masivo(df_subido, modo_carga)
             st.success("Cargado con éxito.")
             st.rerun()
+            st.success("Cargado con éxito.")
+            st.rerun()
