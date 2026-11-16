@@ -7,7 +7,7 @@ import streamlit as st
 from openai import OpenAI
 
 # ==========================================
-# 0. CONFIGURACIÓN DE ACCESO Y ARCHIVOS DE ESTILO
+# 0. CONFIGURACIÓN DE ACCESO Y ESTILOS
 # ==========================================
 USUARIOS_AUTORIZADOS = {
     "adm": "weppa2026",
@@ -127,25 +127,61 @@ def init_db():
 
 init_db()
 
-# Renderizar Banner Global si existe archivo personalizado
-if os.path.exists(BANNER_PATH):
-    st.image(BANNER_PATH, use_container_width=True)
-
-# Inyectar fondo personalizado si el administrador subió uno
+# ==========================================
+# ESTILOS CSS AVANZADOS (Contraste y Legibilidad)
+# ==========================================
+bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
     import base64
     with open(BACKGROUND_PATH, "rb") as f:
         data_bg = base64.b64encode(f.read()).decode("utf-8")
-    st.markdown(f"""
-        <style>
-        .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("data:image/png;base64,{data_bg}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
+    bg_css = f"""
+    .stApp {{
+        background-image: linear-gradient(rgba(10, 10, 10, 0.82), rgba(10, 10, 10, 0.88)), url("data:image/png;base64,{data_bg}");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+    }}
+    """
+else:
+    bg_css = """
+    .stApp {
+        background-color: #121212;
+    }
+    """
+
+st.markdown(f"""
+    <style>
+        {bg_css}
+        
+        /* Contenedores y tarjetas con contraste profesional */
+        .stExpander, .stForm, div[data-testid="stVerticalBlock"] > div > div.stTextInput, div[data-testid="stSelectbox"] {{
+            background-color: rgba(25, 25, 25, 0.85);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
         }}
-        </style>
-    """, unsafe_allow_html=True)
+        
+        /* Asegurar que todos los textos sean nítidos */
+        h1, h2, h3, h4, h5, h6, p, span, label, div {{
+            color: #f1f1f1 !important;
+        }}
+        
+        .stButton>button {{
+            border-radius: 8px;
+            font-weight: 600;
+            background-color: #ff4b4b;
+            color: white !important;
+            border: none;
+        }}
+        .stButton>button:hover {{
+            background-color: #ff2b2b;
+        }}
+    </style>
+""", unsafe_allow_html=True)
+
+# Renderizar Banner Global si existe archivo personalizado
+if os.path.exists(BANNER_PATH):
+    st.image(BANNER_PATH, use_container_width=True)
 
 # ==========================================
 # 2. NAVEGACIÓN: FORMULARIO PÚBLICO VS EQUIPO
@@ -524,7 +560,6 @@ with tabs[0]:
                 st.divider()
                 col_est1, col_est2 = st.columns([2, 1])
                 with col_est1:
-                    # Flujo ordenado y detallado de estatus
                     opciones_est = ["Recibido", "Aprobado", "Enviado"]
                     idx_actual = opciones_est.index(row["estatus"]) if row["estatus"] in opciones_est else 0
                     nuevo_est = st.selectbox("Actualizar estatus (Al pasar a 'Enviado' se descuenta el stock)", opciones_est, index=idx_actual, key=f"sel_{row['id']}")
