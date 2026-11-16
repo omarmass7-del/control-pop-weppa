@@ -25,7 +25,7 @@ BANNER_PATH = "banner_weppa_custom.png"
 BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 
-# Configuración directa de la API Key de Gemini proporcionada
+# Clave de API de Gemini proporcionada
 GEMINI_API_KEY_DIRECTA = "AQ.Ab8RN6Jc3YxUuxGl0Reyp0_LvoSJRzPSVvvhMOSahq3JcJdQYg"
 
 OPCIONES_CANTIDAD = [
