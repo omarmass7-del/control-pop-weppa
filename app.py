@@ -482,4 +482,171 @@ with tabs[0]:
                     st.write(f"📞 **Contacto:** {row['contacto_solicitante']}")
                     st.write(f"🏢 **Canal/Área:** {row['canal_area']} | **Prioridad:** {row['prioridad']}")
                 with col_i2:
-                    st.markdown("**🏪 Tienda o
+                    st.markdown("**🏪 Tienda o Actividad**")
+                    st.write(f"🏪 **Tienda:** {row['nombre_tienda']} (Nueva: {row['tienda_nueva']})")
+                    st.write(f"🎪 **Evento:** {row['descripcion_evento']} ({row['fechas_evento']})")
+                    st.write(f"🤝 **Aliado:** {row['aliado_comercial']} | **Promotor:** {row['nombre_promotor']}")
+                    st.write(f"📍 **Zona:** {row['zona_cobertura']} | **Activación:** {row['activacion_asignada']}")
+                    st.write(f"🎯 **Objetivo:** {row['objetivo_solicitud']}")
+                    if row['detalle_adicional']:
+                        st.write(f"📝 **Detalle:** {row['detalle_adicional']}")
+                with col_i3:
+                    st.markdown("**📦 Envío por Zoom**")
+                    st.write(f"🗺️ **Destino:** {row['estado_destino']}, {row['ciudad_destino']}")
+                    st.write(f"📦 **Oficina Zoom:** {row['oficina_zoom']}")
+                    st.write(f"🏠 **Dirección:** {row['direccion_localidad']} ({row['municipio']}, {row['parroquia']})")
+                    st.write(f"🪪 **Retira:** {row['nombre_retiro']} (CI: {row['cedula_retiro']})")
+                    st.write(f"📱 **Tel/Correo:** {row['telefono_retiro']} | {row['correo_retiro']}")
+                    st.write(f"🕒 **Horario/Ref:** {row['horario_retiro']} — {row['referencia_ubicacion']}")
+                    if row['observaciones_entrega']:
+                        st.write(f"🚚 **Obs. entrega:** {row['observaciones_entrega']}")
+
+                st.markdown("**📋 Detalle de Materiales Solicitados**")
+                try:
+                    df_mats = pd.read_json(row["materiales_json"])
+                    st.dataframe(df_mats, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.write("Sin detalle de materiales.")
+
+                st.divider()
+                col_est1, col_est2 = st.columns([2, 1])
+                with col_est1:
+                    # Flujo ordenado y detallado de estatus
+                    opciones_est = ["Recibido", "Aprobado", "Enviado"]
+                    idx_actual = opciones_est.index(row["estatus"]) if row["estatus"] in opciones_est else 0
+                    nuevo_est = st.selectbox("Actualizar estatus (Al pasar a 'Enviado' se descuenta el stock)", opciones_est, index=idx_actual, key=f"sel_{row['id']}")
+                with col_est2:
+                    st.write("")
+                    st.write("")
+                    if st.button("Guardar Estatus", key=f"btn_{row['id']}"):
+                        actualizar_estatus_solicitud(row["id"], nuevo_est)
+                        if nuevo_est == "Enviado":
+                            st.success(f"✅ ¡Estatus 'Enviado'! Inventario restado automáticamente del sistema.")
+                        else:
+                            st.success(f"✅ Estatus actualizado a '{nuevo_est}'.")
+                        st.rerun()
+    else:
+        st.info("No hay solicitudes registradas todavía en el sistema.")
+
+with tabs[1]:
+    df = obtener_inventario()
+    if not df.empty:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Variedad de Materiales", len(df))
+        with col2:
+            st.metric("Total Unidades Disponibles", int(df['Cantidad'].sum()))
+        st.divider()
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("El inventario está vacío. Suba un archivo Excel/CSV o registre materiales en la pestaña siguiente.")
+
+with tabs[2]:
+    st.subheader("➕ Registro Individual de Entradas o Salidas")
+    with st.form("form_pop"):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            producto = st.text_input("Nombre del Material", placeholder="Ej: Stand, Lanyards, Vasos térmicos").strip()
+            categoria = st.selectbox("Categoría", ["Textil", "Papelería", "Accesorios", "Eventos", "Merchandising"])
+            cantidad = st.selectbox("Cantidad", OPCIONES_CANTIDAD[1:])
+        with col_b:
+            tipo = st.radio("Tipo de Operación", ["Entrada", "Salida"])
+            ubicacion = st.text_input("Ubicación / Destino", value="Almacén Principal")
+
+        if st.form_submit_button("Guardar Movimiento en Inventario"):
+            if producto:
+                ok, msg = registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion)
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+            else:
+                st.warning("Debe escribir el nombre del material.")
+
+with tabs[3]:
+    st.subheader("📂 Importar o Exportar Inventario Masivo")
+    df_export = obtener_inventario()
+    if df_export.empty:
+        df_export = pd.DataFrame({
+            "Material": ["Stand", "Lanyards"],
+            "Categoría": ["Eventos", "Accesorios"],
+            "Cantidad": [10, 200],
+            "Ubicación": ["Caracas", "Lechería"]
+        })
+
+    st.download_button(
+        label="⬇️ Descargar Inventario Actual / Plantilla (CSV)",
+        data=df_export.to_csv(index=False).encode('utf-8'),
+        file_name="inventario_weppa.csv",
+        mime="text/csv"
+    )
+    st.divider()
+    archivo = st.file_uploader("Subir archivo de inventario (.xlsx o .csv)", type=["xlsx", "csv"])
+    modo_carga = st.radio("¿Qué hacer con los datos subidos?", ["Sumar al inventario actual", "Reemplazar todo el inventario"])
+
+    if archivo is not None:
+        try:
+            df_subido = pd.read_csv(archivo) if archivo.name.endswith('.csv') else pd.read_excel(archivo)
+            st.dataframe(df_subido.head())
+            if st.button("✅ Confirmar Carga Masiva"):
+                if "Material" in df_subido.columns and "Cantidad" in df_subido.columns:
+                    cargar_masivo(df_subido, modo_carga)
+                    st.success("¡Inventario cargado y sincronizado exitosamente!")
+                    st.rerun()
+                else:
+                    st.error("El archivo debe contener obligatoriamente las columnas 'Material' y 'Cantidad'.")
+        except Exception as e:
+            st.error(f"Error al procesar el archivo: {e}")
+
+with tabs[4]:
+    st.subheader("💬 Asistente Logístico con ChatGPT (OpenAI)")
+    st.markdown("Consulte al asistente inteligente sobre el stock actual o el estado de las solicitudes en tiempo real.")
+
+    if "chat_history_openai" not in st.session_state:
+        st.session_state.chat_history_openai = []
+
+    for msg in st.session_state.chat_history_openai:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    user_query = st.chat_input("Ej: ¿Qué material tiene menos stock o qué solicitudes están aprobadas?")
+    if user_query:
+        if "OPENAI_API_KEY" not in st.secrets:
+            st.error("⚠️ Configure su 'OPENAI_API_KEY' en los Secretos de Streamlit Cloud.")
+        else:
+            try:
+                client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+                st.session_state.chat_history_openai.append({"role": "user", "content": user_query})
+                with st.chat_message("user"):
+                    st.markdown(user_query)
+
+                df_actual = obtener_inventario()
+                datos_inv = df_actual.to_string(index=False) if not df_actual.empty else "Inventario vacío."
+
+                df_sol_ia = obtener_solicitudes()
+                datos_sol = df_sol_ia[["codigo_solicitud", "solicitado_por", "tipo_solicitud", "cantidad_total", "estatus"]].to_string(index=False) if not df_sol_ia.empty else "Sin solicitudes."
+
+                prompt_sistema = (
+                    "Eres el asistente logístico experto de Material POP para Weppa. "
+                    f"Utiliza estrictamente los siguientes datos actuales:\n\nINVENTARIO:\n{datos_inv}\n\n"
+                    f"SOLICITUDES RECIBIDAS:\n{datos_sol}"
+                )
+
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": prompt_sistema},
+                        {"role": "user", "content": user_query}
+                    ]
+                )
+
+                respuesta_ia = response.choices[0].message.content
+
+                with st.chat_message("assistant"):
+                    st.markdown(respuesta_ia)
+                st.session_state.chat_history_openai.append({"role": "assistant", "content": respuesta_ia})
+
+            except Exception as err:
+                st.error(f"⚠️ Error al conectar con OpenAI: {err}")
