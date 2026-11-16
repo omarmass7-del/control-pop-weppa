@@ -34,6 +34,41 @@ ESTADOS_VENEZUELA = [
     "Sucre", "Táchira", "Trujillo", "Yaracuy", "Zulia"
 ]
 
+# Principales oficinas oficiales de Zoom integradas en el buscador dinámico
+SUCURSALES_ZOOM_OFICIALES = [
+    "Zoom - Caracas (Av. Victoria)",
+    "Zoom - Caracas (Altamira Sur)",
+    "Zoom - Caracas (La Candelaria / Centro)",
+    "Zoom - Caracas (Chacao)",
+    "Zoom - Caracas (El Marqués)",
+    "Zoom - Caracas (Catia)",
+    "Zoom - Miranda (Guarenas / 27 de Febrero)",
+    "Zoom - Miranda (Los Teques)",
+    "Zoom - Miranda (Guatire)",
+    "Zoom - La Guaira (Maiquetía)",
+    "Zoom - Carabobo (Valencia / C.C. San Andrésito)",
+    "Zoom - Carabobo (Naguanagua)",
+    "Zoom - Aragua (Maracay / Torre Sindoni)",
+    "Zoom - Aragua (Cagua - Calle Comercio)",
+    "Zoom - Anzoátegui (Puerto La Cruz - Hotel Rasil)",
+    "Zoom - Anzoátegui (Barcelona - Amana)",
+    "Zoom - Anzoátegui (Lechería - C.C. Mercado La Isla)",
+    "Zoom - Anzoátegui (Anaco Centro)",
+    "Zoom - Anzoátegui (El Tigre - C.C. Alba)",
+    "Zoom - Zulia (Maracaibo - 18 de Octubre)",
+    "Zoom - Zulia (Maracaibo - Amparo)",
+    "Zoom - Zulia (Maracaibo - Bella Vista)",
+    "Zoom - Lara (Barquisimeto - Aeropuerto Jacinto Lara)",
+    "Zoom - Táchira (San Cristóbal - 7ma Avenida)",
+    "Zoom - Mérida (Santa Elena de Arenales)",
+    "Zoom - Bolívar (Puerto Ordaz - C.C. Plaza Atlántico)",
+    "Zoom - Bolívar (Ciudad Bolívar - Hangar Distribuidora)",
+    "Zoom - Nueva Esparta (Porlamar - Villa Rosa)",
+    "Zoom - Portuguesa (Acarigua - C.C. Páez)",
+    "Zoom - Apure (Achaguas)",
+    "Otra agencia Zoom / Destino Nacional a convenir"
+]
+
 PREFIJOS_TELEFONO = ["0412", "0414", "0424", "0416", "0426", "0212", "Otro"]
 
 CATALOGO_MATERIALES_BASE = [
@@ -128,7 +163,7 @@ def init_db():
 init_db()
 
 # ==========================================
-# ESTILOS CSS AVANZADOS (Contraste y Legibilidad)
+# ESTILOS CSS AVANZADOS (Legibilidad y Contraste)
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -154,14 +189,12 @@ st.markdown(f"""
     <style>
         {bg_css}
         
-        /* Contenedores y tarjetas con contraste profesional */
         .stExpander, .stForm, div[data-testid="stVerticalBlock"] > div > div.stTextInput, div[data-testid="stSelectbox"] {{
             background-color: rgba(25, 25, 25, 0.85);
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.15);
         }}
         
-        /* Asegurar que todos los textos sean nítidos */
         h1, h2, h3, h4, h5, h6, p, span, label, div {{
             color: #f1f1f1 !important;
         }}
@@ -193,7 +226,7 @@ modo_vista = st.sidebar.radio(
 
 if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.title("📋 Solicitud de Material POP — Weppa")
-    st.markdown("Complete cuidadosamente las secciones del formulario y seleccione las cantidades requeridas en el desplegable de cada material.")
+    st.markdown("Complete cuidadosamente las secciones del formulario, seleccione la agencia de Zoom oficial integrada y las cantidades requeridas.")
 
     if "solicitud_enviada_ok" not in st.session_state:
         st.session_state.solicitud_enviada_ok = None
@@ -242,33 +275,36 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
 
         st.divider()
-        st.subheader("3. Envío por Zoom")
+        st.subheader("3. Envío por Zoom (Red de Oficinas Oficiales)")
         z1, z2, z3 = st.columns(3)
         with z1:
             estado_destino = st.selectbox("Estado de destino", ESTADOS_VENEZUELA)
             ciudad_destino = st.text_input("Ciudad de destino").strip()
-            oficina_zoom = st.text_input("Oficina Zoom de destino").strip()
-            direccion_localidad = st.text_input("Dirección o localidad").strip()
+            # Selector integrado con la red oficial de oficinas Zoom
+            oficina_zoom = st.selectbox("Agencia / Oficina Zoom de destino *", SUCURSALES_ZOOM_OFICIALES)
         with z2:
+            direccion_localidad = st.text_input("Dirección o localidad").strip()
             municipio = st.text_input("Municipio").strip()
             parroquia = st.text_input("Parroquia").strip()
             nombre_retiro = st.text_input("Nombre de quien retirará").strip()
+        with z3:
             ci_c1, ci_c2 = st.columns([1, 2])
             with ci_c1:
-                tipo_ci = st.selectbox("Tipo", ["V-", "E-", "J-"], key="tipo_ci")
+                tipo_ci = st.selectbox("Tipo CI", ["V-", "E-", "J-"], key="tipo_ci")
             with ci_c2:
-                num_ci = st.text_input("Cédula", placeholder="12345678").strip()
+                num_ci = st.text_input("Cédula de retiro", placeholder="12345678").strip()
             cedula_retiro = f"{tipo_ci}{num_ci}" if num_ci else ""
-        with z3:
+
             tret_c1, tret_c2 = st.columns([1, 2])
             with tret_c1:
                 prefijo_ret = st.selectbox("Prefijo", PREFIJOS_TELEFONO, key="pref_ret")
             with tret_c2:
-                num_ret = st.text_input("Teléfono (retiro)", placeholder="1234567").strip()
+                num_ret = st.text_input("Teléfono retiro", placeholder="1234567").strip()
             telefono_retiro = f"{prefijo_ret}-{num_ret}" if num_ret else ""
             correo_retiro = st.text_input("Correo electrónico (retiro)").strip()
             referencia_ubicacion = st.text_input("Referencia de ubicación").strip()
             horario_retiro = st.text_input("Horario estimado de retiro").strip()
+
         observaciones_entrega = st.text_area("Observaciones de entrega", height=68).strip()
 
         st.divider()
@@ -542,7 +578,7 @@ with tabs[0]:
                 with col_i3:
                     st.markdown("**📦 Envío por Zoom**")
                     st.write(f"🗺️ **Destino:** {row['estado_destino']}, {row['ciudad_destino']}")
-                    st.write(f"📦 **Oficina Zoom:** {row['oficina_zoom']}")
+                    st.write(f"🏢 **Oficina Zoom:** {row['oficina_zoom']}")
                     st.write(f"🏠 **Dirección:** {row['direccion_localidad']} ({row['municipio']}, {row['parroquia']})")
                     st.write(f"🪪 **Retira:** {row['nombre_retiro']} (CI: {row['cedula_retiro']})")
                     st.write(f"📱 **Tel/Correo:** {row['telefono_retiro']} | {row['correo_retiro']}")
