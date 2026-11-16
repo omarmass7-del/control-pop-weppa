@@ -611,4 +611,48 @@ with tabs[2]:
     if not df.empty:
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Variedad de Materiales
+            st.metric("Variedad de Materiales", len(df))
+        with col2:
+            st.metric("Total Unidades Disponibles", int(df['Cantidad'].sum()))
+        st.divider()
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Inventario vacío.")
+
+with tabs[3]:
+    st.subheader("➕ Registro Individual")
+    with st.form("form_pop"):
+        producto = st.text_input("Material").strip()
+        categoria = st.selectbox("Categoría", ["Textil", "Papelería", "Accesorios", "Eventos", "Merchandising"])
+        cantidad = st.selectbox("Cantidad", OPCIONES_CANTIDAD[1:])
+        tipo = st.radio("Operación", ["Entrada", "Salida"])
+        ubicacion = st.text_input("Ubicación", value="Almacén Principal")
+        if st.form_submit_button("Guardar"):
+            ok, msg = registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion)
+            if ok:
+                st.success(msg)
+                st.rerun()
+            else:
+                st.error(msg)
+
+with tabs[4]:
+    st.subheader("📂 Inventario Masivo")
+    archivo = st.file_uploader("Subir inventario", type=["xlsx", "csv"])
+    modo_carga = st.radio("Modo", ["Sumar al inventario actual", "Reemplazar todo el inventario"])
+    if archivo is not None:
+        if st.button("Confirmar Carga"):
+            df_subido = pd.read_csv(archivo) if archivo.name.endswith('.csv') else pd.read_excel(archivo)
+            cargar_masivo(df_subido, modo_carga)
+            st.success("Cargado con éxito.")
+            st.rerun()
+
+with tabs[5]:
+    st.subheader("💬 Asistente IA")
+    user_query = st.chat_input("Pregunta algo sobre el inventario...")
+    if user_query:
+        if "OPENAI_API_KEY" not in st.secrets:
+            st.error("Configure OPENAI_API_KEY en Streamlit Secrets.")
+        else:
+            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+            response = client.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": user_query}])
+            st.markdown(response.choices[0].message.content)
