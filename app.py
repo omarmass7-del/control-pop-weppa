@@ -212,7 +212,118 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             horario_retiro = st.text_input("Horario estimado de retiro").strip()
         observaciones_entrega = st.text_area("Observaciones de entrega", height=68).strip()
 
-        st.
-            st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
-        except Exception as err:
-            st.error("⚠️ Error: Configura tu API Key de Gemini en los Secretos de Streamlit Cloud (GEMINI_API_KEY).")
+        st.divider()
+        st.subheader("4. Materiales solicitados")
+        st.caption("Haz clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas.")
+        df_mat_template = pd.DataFrame(CATALOGO_MATERIALES_BASE)
+        df_mat_editado = st.data_editor(
+            df_mat_template,
+            use_container_width=True,
+            hide_index=True,
+            disabled=["Material_ID", "Material"],
+            column_config={
+                "Material_ID": st.column_config.TextColumn("ID"),
+                "Material": st.column_config.TextColumn("Material"),
+                "Cantidad": st.column_config.SelectboxColumn(
+                    "Cantidad",
+                    help="Despliega y selecciona la cantidad de piezas",
+                    options=OPCIONES_CANTIDAD,
+                    default=0,
+                    required=True
+                ),
+                "Medidas_especificaciones": st.column_config.TextColumn("Medidas / Especificaciones"),
+                "Observaciones": st.column_config.TextColumn("Observaciones")
+            }
+        )
+
+        enviar_form = st.form_submit_button("📤 Enviar Solicitud POP")
+
+        if enviar_form:
+            materiales_filtrados = df_mat_editado[df_mat_editado["Cantidad"] > 0]
+            cantidad_total = int(materiales_filtrados["Cantidad"].sum())
+            estado_final = "" if estado_destino == "Seleccione un estado..." else estado_destino
+
+            if not solicitado_por or not num_sol:
+                st.error("⚠️ Por favor completa los campos obligatorios: 'Solicitado por' y 'Número de contacto'.")
+            elif cantidad_total <= 0:
+                st.error("⚠️ Debes seleccionar al menos 1 material con cantidad mayor a 0.")
+            else:
+                codigo_sol = f"POP-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                materiales_json = materiales_filtrados.to_json(orient="records", force_ascii=False)
+
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("""
+                        INSERT INTO solicitudes_v2 (
+                            codigo_solicitud, fecha_solicitud, solicitado_por, cargo_departamento,
+                            canal_area, tipo_solicitud, prioridad, fecha_entrega, contacto_solicitante,
+                            nombre_tienda, tienda_nueva, descripcion_evento, fechas_evento,
+                            aliado_comercial, nombre_promotor, zona_cobertura, activacion_asignada,
+                            objetivo_solicitud, detalle_adicional, estado_destino, ciudad_destino,
+                            oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
+                            cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
+                            horario_retiro, observaciones_entrega, cantidad_total, materiales_json, estatus
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        codigo_sol, str(fecha_solicitud), solicitado_por, cargo_departamento,
+                        canal_area, tipo_solicitud, prioridad, str(fecha_entrega), contacto_solicitante,
+                        nombre_tienda, tienda_nueva, descripcion_evento, fechas_evento,
+                        aliado_comercial, nombre_promotor, zona_cobertura, activacion_asignada,
+                        objetivo_solicitud, detalle_adicional, estado_final, ciudad_destino,
+                        oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
+                        cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
+                        horario_retiro, observaciones_entrega, cantidad_total, materiales_json, "Recibido"
+                    ))
+                    conn.commit()
+
+                st.session_state.solicitud_enviada_ok = codigo_sol
+                st.rerun()
+    st.stop()
+
+# ==========================================
+# 3. LOGIN PARA EL EQUIPO INTERNO
+# ==========================================
+if not st.session_state.autenticado:
+    st.title("🔒 Acceso Corporativo — Control POP Weppa")
+    st.markdown("Inicia sesión utilizando tu **correo corporativo** (`@weppa.io`) o usuario `adm`.")
+
+    with st.form("login_form"):
+        usuario = st.text_input("Correo o Usuario").strip().lower()
+        clave = st.text_input("Contraseña", type="password")
+        entrar = st.form_submit_button("Ingresar al Sistema")
+
+        if entrar:
+            if usuario in USUARIOS_AUTORIZADOS and USUARIOS_AUTORIZADOS[usuario] == clave:
+                st.session_state.autenticado = True
+                st.session_state.usuario_actual = usuario
+                st.rerun()
+            else:
+                st.error("❌ Credenciales incorrectas. Verifica tu usuario y contraseña.")
+    st.stop()
+
+# ==========================================
+# 4. FUNCIONES DE GESTIÓN INTERNA
+# ==========================================
+def obtener_inventario():
+    with sqlite3.connect(DB_PATH) as conn:
+        df = pd.read_sql_query("SELECT id, producto AS 'Material', categoria AS 'Categoría', cantidad AS 'Cantidad', ubicacion AS 'Ubicación' FROM inventario", conn)
+    return df
+
+def obtener_solicitudes():
+    with sqlite3.connect(DB_PATH) as conn:
+        df = pd.read_sql_query("SELECT * FROM solicitudes_v2 ORDER BY id DESC", conn)
+    return df
+
+def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
+        conn.commit()
+
+def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (producto,))
+        res = cursor.fetchone()
+
+        if res is None:
+            if tipo == "Entrada":
+                cursor.execute("INSERT
