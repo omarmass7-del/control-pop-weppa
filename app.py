@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pandas as pd
 import streamlit as st
-from google import genai
+import google.generativeai as genai
 
 # ==========================================
 # 0. CONFIGURACIÓN DE ACCESO Y ESTILOS
@@ -158,7 +158,7 @@ def enviar_correo_notificacion(asunto, cuerpo):
             print(f"Error enviando correo: {e}")
 
 # ==========================================
-# ESTILOS CSS AVANZADOS
+# ESTILOS CSS AVANZADOS (Respetando tus archivos personalizados)
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -516,51 +516,9 @@ def cargar_masivo(df_subido, modo):
 
 with st.sidebar:
     st.write(f"👤 Conectado como:\n**{st.session_state.usuario_actual}**")
-    if st.session_state.usuario_actual == "adm":
-        st.divider()
-        st.markdown("### 🎨 Personalización Visual")
-        banner_subido = st.file_uploader("Subir Banner Superior", type=["png", "jpg", "jpeg"])
-        if banner_subido is not None:
-            with open(BANNER_PATH, "wb") as f:
-                f.write(banner_subido.getbuffer())
-            st.success("¡Banner actualizado!")
-            st.rerun()
-
-        if os.path.exists(BANNER_PATH):
-            if st.button("🗑️ Eliminar Banner"):
-                os.remove(BANNER_PATH)
-                st.rerun()
-
-        st.markdown("---")
-        bg_subido = st.file_uploader("Subir Imagen de Fondo", type=["png", "jpg", "jpeg"])
-        if bg_subido is not None:
-            with open(BACKGROUND_PATH, "wb") as f:
-                f.write(bg_subido.getbuffer())
-            st.success("¡Fondo actualizado!")
-            st.rerun()
-
-        if os.path.exists(BACKGROUND_PATH):
-            if st.button("🗑️ Eliminar Fondo"):
-                os.remove(BACKGROUND_PATH)
-                st.rerun()
-
-        st.divider()
-        st.markdown("### 📦 Agencias Zoom (Excel)")
-        zoom_subido = st.file_uploader("Actualizar Excel Zoom", type=["xlsx", "csv"])
-        if zoom_subido is not None:
-            try:
-                df_z = pd.read_csv(zoom_subido) if zoom_subido.name.endswith('.csv') else pd.read_excel(zoom_subido)
-                df_z.to_excel(ZOOM_EXCEL_PATH, index=False)
-                st.success("¡Excel de agencias Zoom cargado con éxito!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-        if os.path.exists(ZOOM_EXCEL_PATH):
-            if st.button("🗑️ Eliminar Excel Zoom"):
-                os.remove(ZOOM_EXCEL_PATH)
-                st.rerun()
-
+    st.divider()
+    st.markdown("### 🛠️ Configuración y Panel")
+    st.caption("Los archivos personalizados (Banner, Fondo y Excel Zoom) se cargan y leen automáticamente desde el repositorio.")
     st.divider()
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
@@ -701,7 +659,7 @@ with tabs[5]:
             st.error("⚠️ Configure su 'GEMINI_API_KEY' en los Secretos de Streamlit Cloud.")
         else:
             try:
-                client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
                 st.session_state.chat_history_gemini.append({"role": "user", "content": user_query})
                 with st.chat_message("user"):
@@ -719,11 +677,9 @@ with tabs[5]:
                     f"SOLICITUDES RECIBIDAS:\n{datos_sol}\n\nPregunta del usuario: {user_query}"
                 )
 
-                # Usando el modelo 1.5 con la ruta completa requerida por la API moderna
-                response = client.models.generate_content(
-                    model="models/gemini-1.5-flash",
-                    contents=prompt_sistema,
-                )
+                # Utiliza el modelo estándar universal y estable con la librería clásica
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content(prompt_sistema)
                 respuesta_ia = response.text
 
                 with st.chat_message("assistant"):
