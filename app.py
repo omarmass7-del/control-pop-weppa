@@ -71,6 +71,10 @@ if "autenticado" not in st.session_state:
 if "usuario_actual" not in st.session_state:
     st.session_state.usuario_actual = ""
 
+def cerrar_sesion():
+    st.session_state.autenticado = False
+    st.session_state.usuario_actual = ""
+
 # ==========================================
 # 1. BASE DE DATOS LOCAL (SQLite)
 # ==========================================
@@ -228,10 +232,18 @@ if os.path.exists(BANNER_PATH):
     st.image(BANNER_PATH, use_container_width=True)
 
 # ==========================================
-# BARRA LATERAL (Navegación y Panel Admin Exclusivo)
+# BARRA LATERAL (Navegación, Cierre de Sesión y Panel Admin)
 # ==========================================
 with st.sidebar:
     st.title("⚙️ Control POP Weppa")
+    
+    # Bloque de sesión activa visible para TODOS los usuarios logueados
+    if st.session_state.autenticado:
+        st.info(f"👤 Sesión activa:\n**{st.session_state.usuario_actual}**")
+        if st.button("🚪 Cerrar Sesión", use_container_width=True, key="btn_logout_sidebar"):
+            cerrar_sesion()
+            st.rerun()
+        st.divider()
     
     modo_vista = st.radio(
         "Navegación",
@@ -240,7 +252,7 @@ with st.sidebar:
     
     if st.session_state.autenticado and st.session_state.usuario_actual == "adm":
         st.divider()
-        st.success("👑 Sesión de Administrador (`adm`)")
+        st.success("👑 Herramientas de Administrador")
         
         st.markdown("### 👔 Ejecutivos (Archivo TXT)")
         st.caption("Suba un .txt con un nombre por línea para el desplegable de la solicitud.")
@@ -254,7 +266,7 @@ with st.sidebar:
 
         if os.path.exists(EJECUTIVOS_TXT_PATH):
             lista_ej_actual = obtener_lista_ejecutivos()
-            st.info(f"📋 {len(lista_ej_actual)} ejecutivos cargados.")
+            st.caption(f"📋 {len(lista_ej_actual)} ejecutivos cargados.")
             if st.button("🗑️ Eliminar TXT Ejecutivos"):
                 os.remove(EJECUTIVOS_TXT_PATH)
                 st.rerun()
@@ -517,7 +529,7 @@ else:
     # ==========================================
     if not st.session_state.autenticado:
         st.title("🔒 Acceso Corporativo — Control POP Weppa")
-        st.info("Inicie sesión con `adm` para habilitar el panel de configuración de Ejecutivos, Zoom y Personalización Visual en la barra lateral.")
+        st.info("Inicie sesión con su usuario corporativo para acceder al inventario y seguimiento de solicitudes.")
         with st.form("login_form"):
             usuario = st.text_input("Correo o Usuario").strip().lower()
             clave = st.text_input("Contraseña", type="password")
@@ -618,9 +630,8 @@ else:
     with col_user:
         st.write(f"👤 Conectado como: **{st.session_state.usuario_actual}**")
     with col_logout:
-        if st.button("Cerrar Sesión"):
-            st.session_state.autenticado = False
-            st.session_state.usuario_actual = ""
+        if st.button("🚪 Cerrar Sesión", key="btn_logout_main"):
+            cerrar_sesion()
             st.rerun()
 
     st.title("📦 Control de Material POP — Weppa (Panel Interno)")
