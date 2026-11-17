@@ -25,6 +25,10 @@ BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 EJECUTIVOS_TXT_PATH = "ejecutivos_weppa.txt"
 
+# Opciones de 0 a 10 exclusivamente para el formulario de solicitudes POP
+OPCIONES_CANTIDAD_SOLICITUD = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+# Opciones amplias para el inventario interno del almacén
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     25, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500,
@@ -233,7 +237,6 @@ with st.sidebar:
         ["📋 Solicitar Material POP (Externo)", "🔐 Panel Interno / Administración"]
     )
     
-    # Si el administrador 'adm' ya inició sesión, tiene acceso a las herramientas de configuración desde cualquier vista
     if st.session_state.autenticado and st.session_state.usuario_actual == "adm":
         st.divider()
         st.success("👑 Sesión de Administrador (`adm`)")
@@ -345,7 +348,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     with c1:
         fecha_solicitud = st.date_input("Fecha de solicitud", value=date.today())
         
-        # 👇 DESPLEGABLE AUTOMÁTICO DE EJECUTIVOS DESDE EL ARCHIVO TXT
         lista_ejecutivos = obtener_lista_ejecutivos()
         if lista_ejecutivos:
             ejecutivo_sel = st.selectbox(
@@ -443,7 +445,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
 
     st.divider()
     st.subheader("4. Materiales solicitados")
-    st.caption("Haga clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas.")
+    st.caption("Haga clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas (0 al 10).")
     df_mat_template = pd.DataFrame(CATALOGO_MATERIALES_BASE)
     df_mat_editado = st.data_editor(
         df_mat_template,
@@ -455,7 +457,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             "Material": st.column_config.TextColumn("Material"),
             "Cantidad": st.column_config.SelectboxColumn(
                 "Cantidad",
-                options=OPCIONES_CANTIDAD,
+                options=OPCIONES_CANTIDAD_SOLICITUD,
                 default=0,
                 required=True
             ),
