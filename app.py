@@ -182,7 +182,7 @@ def enviar_correo_notificacion(asunto, cuerpo):
             print(f"Error enviando correo: {e}")
 
 # ==========================================
-# ESTILOS CSS (MODO OSCURO + CALENDARIO CON TEXTOS NEGROS)
+# ESTILOS CSS (MODO OSCURO + CALENDARIO OSCURO CON LETRAS BLANCAS)
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -232,23 +232,24 @@ st.markdown(f"""
         }}
         
         /* ==========================================
-           FORZAR CALENDARIO CON FONDO BLANCO Y LETRAS NEGRAS
+           CALENDARIO OSCURO CON LETRAS BLANCAS
            ========================================== */
         div[data-baseweb="calendar"], div[data-baseweb="datepicker"], div[data-baseweb="popover"] div[data-baseweb="calendar"] {{
-            background-color: #ffffff !important;
-            color: #000000 !important;
+            background-color: #1a1a1a !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
         }}
         
-        /* Todos los textos, números, meses y días dentro del calendario en negro */
+        /* Todos los textos, números, meses y días dentro del calendario en blanco */
         div[data-baseweb="calendar"] * {{
-            color: #000000 !important;
+            color: #ffffff !important;
             background-color: transparent !important;
         }}
         
         /* Botones de navegación de meses (flechas) */
         div[data-baseweb="calendar"] button {{
-            color: #000000 !important;
-            background-color: #f0f0f0 !important;
+            color: #ffffff !important;
+            background-color: #2a2a2a !important;
         }}
         div[data-baseweb="calendar"] button:hover {{
             background-color: #ff4b4b !important;
