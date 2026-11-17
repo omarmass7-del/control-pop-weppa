@@ -46,21 +46,22 @@ ESTADOS_VENEZUELA = [
 
 PREFIJOS_TELEFONO = ["0412", "0414", "0424", "0416", "0426", "0212", "Otro"]
 
+# Catálogo limpio solo con ID, Material y Cantidad
 CATALOGO_MATERIALES_BASE = [
-    {"Material_ID": "POP-001", "Material": "Stand", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-002", "Material": "Pendón grande", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-003", "Material": "Lanyards", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-004", "Material": "Vasos térmicos", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-005", "Material": "Dummies", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-006", "Material": "Portateléfono redondo", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-007", "Material": "Portateléfono cuadrado", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-008", "Material": "Gobos y portaglobos", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-009", "Material": "Kits pequeños", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-010", "Material": "Kits grandes", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-011", "Material": "Visera de gorras", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-012", "Material": "Chupis", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-013", "Material": "Habladores", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-014", "Material": "Bolsas de tela", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""}
+    {"Material_ID": "POP-001", "Material": "Stand", "Cantidad": 0},
+    {"Material_ID": "POP-002", "Material": "Pendón grande", "Cantidad": 0},
+    {"Material_ID": "POP-003", "Material": "Lanyards", "Cantidad": 0},
+    {"Material_ID": "POP-004", "Material": "Vasos térmicos", "Cantidad": 0},
+    {"Material_ID": "POP-005", "Material": "Dummies", "Cantidad": 0},
+    {"Material_ID": "POP-006", "Material": "Portateléfono redondo", "Cantidad": 0},
+    {"Material_ID": "POP-007", "Material": "Portateléfono cuadrado", "Cantidad": 0},
+    {"Material_ID": "POP-008", "Material": "Gobos y portaglobos", "Cantidad": 0},
+    {"Material_ID": "POP-009", "Material": "Kits pequeños", "Cantidad": 0},
+    {"Material_ID": "POP-010", "Material": "Kits grandes", "Cantidad": 0},
+    {"Material_ID": "POP-011", "Material": "Visera de gorras", "Cantidad": 0},
+    {"Material_ID": "POP-012", "Material": "Chupis", "Cantidad": 0},
+    {"Material_ID": "POP-013", "Material": "Habladores", "Cantidad": 0},
+    {"Material_ID": "POP-014", "Material": "Bolsas de tela", "Cantidad": 0}
 ]
 
 st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wide")
@@ -460,9 +461,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
                 options=OPCIONES_CANTIDAD_SOLICITUD,
                 default=0,
                 required=True
-            ),
-            "Medidas_especificaciones": st.column_config.TextColumn("Medidas / Especificaciones"),
-            "Observaciones": st.column_config.TextColumn("Observaciones")
+            )
         }
     )
 
