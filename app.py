@@ -25,10 +25,6 @@ BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 EJECUTIVOS_TXT_PATH = "ejecutivos_weppa.txt"
 
-# Opciones de 0 a 10 exclusivamente para el formulario de solicitudes POP
-OPCIONES_CANTIDAD_SOLICITUD = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-
-# Opciones amplias para el inventario interno del almacén
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     25, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500,
@@ -46,22 +42,21 @@ ESTADOS_VENEZUELA = [
 
 PREFIJOS_TELEFONO = ["0412", "0414", "0424", "0416", "0426", "0212", "Otro"]
 
-# Catálogo limpio solo con ID, Material y Cantidad
 CATALOGO_MATERIALES_BASE = [
-    {"Material_ID": "POP-001", "Material": "Stand", "Cantidad": 0},
-    {"Material_ID": "POP-002", "Material": "Pendón grande", "Cantidad": 0},
-    {"Material_ID": "POP-003", "Material": "Lanyards", "Cantidad": 0},
-    {"Material_ID": "POP-004", "Material": "Vasos térmicos", "Cantidad": 0},
-    {"Material_ID": "POP-005", "Material": "Dummies", "Cantidad": 0},
-    {"Material_ID": "POP-006", "Material": "Portateléfono redondo", "Cantidad": 0},
-    {"Material_ID": "POP-007", "Material": "Portateléfono cuadrado", "Cantidad": 0},
-    {"Material_ID": "POP-008", "Material": "Gobos y portaglobos", "Cantidad": 0},
-    {"Material_ID": "POP-009", "Material": "Kits pequeños", "Cantidad": 0},
-    {"Material_ID": "POP-010", "Material": "Kits grandes", "Cantidad": 0},
-    {"Material_ID": "POP-011", "Material": "Visera de gorras", "Cantidad": 0},
-    {"Material_ID": "POP-012", "Material": "Chupis", "Cantidad": 0},
-    {"Material_ID": "POP-013", "Material": "Habladores", "Cantidad": 0},
-    {"Material_ID": "POP-014", "Material": "Bolsas de tela", "Cantidad": 0}
+    {"Material_ID": "POP-001", "Material": "Stand", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-002", "Material": "Pendón grande", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-003", "Material": "Lanyards", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-004", "Material": "Vasos térmicos", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-005", "Material": "Dummies", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-006", "Material": "Portateléfono redondo", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-007", "Material": "Portateléfono cuadrado", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-008", "Material": "Gobos y portaglobos", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-009", "Material": "Kits pequeños", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-010", "Material": "Kits grandes", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-011", "Material": "Visera de gorras", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-012", "Material": "Chupis", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-013", "Material": "Habladores", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
+    {"Material_ID": "POP-014", "Material": "Bolsas de tela", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""}
 ]
 
 st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wide")
@@ -69,10 +64,6 @@ st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wid
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 if "usuario_actual" not in st.session_state:
-    st.session_state.usuario_actual = ""
-
-def cerrar_sesion():
-    st.session_state.autenticado = False
     st.session_state.usuario_actual = ""
 
 # ==========================================
@@ -232,27 +223,20 @@ if os.path.exists(BANNER_PATH):
     st.image(BANNER_PATH, use_container_width=True)
 
 # ==========================================
-# BARRA LATERAL (Navegación, Cierre de Sesión y Panel Admin)
+# BARRA LATERAL (Navegación y Panel Admin Exclusivo)
 # ==========================================
 with st.sidebar:
     st.title("⚙️ Control POP Weppa")
-    
-    # Bloque de sesión activa visible para TODOS los usuarios logueados
-    if st.session_state.autenticado:
-        st.info(f"👤 Sesión activa:\n**{st.session_state.usuario_actual}**")
-        if st.button("🚪 Cerrar Sesión", use_container_width=True, key="btn_logout_sidebar"):
-            cerrar_sesion()
-            st.rerun()
-        st.divider()
     
     modo_vista = st.radio(
         "Navegación",
         ["📋 Solicitar Material POP (Externo)", "🔐 Panel Interno / Administración"]
     )
     
+    # Si el administrador 'adm' ya inició sesión, tiene acceso a las herramientas de configuración desde cualquier vista
     if st.session_state.autenticado and st.session_state.usuario_actual == "adm":
         st.divider()
-        st.success("👑 Herramientas de Administrador")
+        st.success("👑 Sesión de Administrador (`adm`)")
         
         st.markdown("### 👔 Ejecutivos (Archivo TXT)")
         st.caption("Suba un .txt con un nombre por línea para el desplegable de la solicitud.")
@@ -266,7 +250,7 @@ with st.sidebar:
 
         if os.path.exists(EJECUTIVOS_TXT_PATH):
             lista_ej_actual = obtener_lista_ejecutivos()
-            st.caption(f"📋 {len(lista_ej_actual)} ejecutivos cargados.")
+            st.info(f"📋 {len(lista_ej_actual)} ejecutivos cargados.")
             if st.button("🗑️ Eliminar TXT Ejecutivos"):
                 os.remove(EJECUTIVOS_TXT_PATH)
                 st.rerun()
@@ -361,6 +345,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     with c1:
         fecha_solicitud = st.date_input("Fecha de solicitud", value=date.today())
         
+        # 👇 DESPLEGABLE AUTOMÁTICO DE EJECUTIVOS DESDE EL ARCHIVO TXT
         lista_ejecutivos = obtener_lista_ejecutivos()
         if lista_ejecutivos:
             ejecutivo_sel = st.selectbox(
@@ -458,7 +443,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
 
     st.divider()
     st.subheader("4. Materiales solicitados")
-    st.caption("Haga clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas (0 al 10).")
+    st.caption("Haga clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas.")
     df_mat_template = pd.DataFrame(CATALOGO_MATERIALES_BASE)
     df_mat_editado = st.data_editor(
         df_mat_template,
@@ -470,10 +455,12 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             "Material": st.column_config.TextColumn("Material"),
             "Cantidad": st.column_config.SelectboxColumn(
                 "Cantidad",
-                options=OPCIONES_CANTIDAD_SOLICITUD,
+                options=OPCIONES_CANTIDAD,
                 default=0,
                 required=True
-            )
+            ),
+            "Medidas_especificaciones": st.column_config.TextColumn("Medidas / Especificaciones"),
+            "Observaciones": st.column_config.TextColumn("Observaciones")
         }
     )
 
@@ -529,7 +516,7 @@ else:
     # ==========================================
     if not st.session_state.autenticado:
         st.title("🔒 Acceso Corporativo — Control POP Weppa")
-        st.info("Inicie sesión con su usuario corporativo para acceder al inventario y seguimiento de solicitudes.")
+        st.info("Inicie sesión con `adm` para habilitar el panel de configuración de Ejecutivos, Zoom y Personalización Visual en la barra lateral.")
         with st.form("login_form"):
             usuario = st.text_input("Correo o Usuario").strip().lower()
             clave = st.text_input("Contraseña", type="password")
@@ -630,8 +617,9 @@ else:
     with col_user:
         st.write(f"👤 Conectado como: **{st.session_state.usuario_actual}**")
     with col_logout:
-        if st.button("🚪 Cerrar Sesión", key="btn_logout_main"):
-            cerrar_sesion()
+        if st.button("Cerrar Sesión"):
+            st.session_state.autenticado = False
+            st.session_state.usuario_actual = ""
             st.rerun()
 
     st.title("📦 Control de Material POP — Weppa (Panel Interno)")
