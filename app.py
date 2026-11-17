@@ -25,6 +25,10 @@ BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 EJECUTIVOS_TXT_PATH = "ejecutivos_weppa.txt"
 
+# Opciones de 0 a 10 exclusivamente para el formulario de solicitudes POP
+OPCIONES_CANTIDAD_SOLICITUD = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+# Opciones amplias para el inventario interno del almacén
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     25, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500,
@@ -42,21 +46,22 @@ ESTADOS_VENEZUELA = [
 
 PREFIJOS_TELEFONO = ["0412", "0414", "0424", "0416", "0426", "0212", "Otro"]
 
+# Catálogo limpio solo con ID, Material y Cantidad
 CATALOGO_MATERIALES_BASE = [
-    {"Material_ID": "POP-001", "Material": "Stand", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-002", "Material": "Pendón grande", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-003", "Material": "Lanyards", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-004", "Material": "Vasos térmicos", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-005", "Material": "Dummies", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-006", "Material": "Portateléfono redondo", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-007", "Material": "Portateléfono cuadrado", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-008", "Material": "Gobos y portaglobos", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-009", "Material": "Kits pequeños", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-010", "Material": "Kits grandes", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-011", "Material": "Visera de gorras", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-012", "Material": "Chupis", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-013", "Material": "Habladores", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""},
-    {"Material_ID": "POP-014", "Material": "Bolsas de tela", "Cantidad": 0, "Medidas_especificaciones": "", "Observaciones": ""}
+    {"Material_ID": "POP-001", "Material": "Stand", "Cantidad": 0},
+    {"Material_ID": "POP-002", "Material": "Pendón grande", "Cantidad": 0},
+    {"Material_ID": "POP-003", "Material": "Lanyards", "Cantidad": 0},
+    {"Material_ID": "POP-004", "Material": "Vasos térmicos", "Cantidad": 0},
+    {"Material_ID": "POP-005", "Material": "Dummies", "Cantidad": 0},
+    {"Material_ID": "POP-006", "Material": "Portateléfono redondo", "Cantidad": 0},
+    {"Material_ID": "POP-007", "Material": "Portateléfono cuadrado", "Cantidad": 0},
+    {"Material_ID": "POP-008", "Material": "Gobos y portaglobos", "Cantidad": 0},
+    {"Material_ID": "POP-009", "Material": "Kits pequeños", "Cantidad": 0},
+    {"Material_ID": "POP-010", "Material": "Kits grandes", "Cantidad": 0},
+    {"Material_ID": "POP-011", "Material": "Visera de gorras", "Cantidad": 0},
+    {"Material_ID": "POP-012", "Material": "Chupis", "Cantidad": 0},
+    {"Material_ID": "POP-013", "Material": "Habladores", "Cantidad": 0},
+    {"Material_ID": "POP-014", "Material": "Bolsas de tela", "Cantidad": 0}
 ]
 
 st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wide")
@@ -64,6 +69,10 @@ st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wid
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 if "usuario_actual" not in st.session_state:
+    st.session_state.usuario_actual = ""
+
+def cerrar_sesion():
+    st.session_state.autenticado = False
     st.session_state.usuario_actual = ""
 
 # ==========================================
@@ -173,7 +182,7 @@ def enviar_correo_notificacion(asunto, cuerpo):
             print(f"Error enviando correo: {e}")
 
 # ==========================================
-# ESTILOS CSS AVANZADOS
+# ESTILOS CSS FORZADOS A MODO OSCURO TOTAL
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -182,7 +191,7 @@ if os.path.exists(BACKGROUND_PATH):
         data_bg = base64.b64encode(f.read()).decode("utf-8")
     bg_css = f"""
     .stApp {{
-        background-image: linear-gradient(rgba(10, 10, 10, 0.82), rgba(10, 10, 10, 0.88)), url("data:image/png;base64,{data_bg}");
+        background-image: linear-gradient(rgba(10, 10, 10, 0.90), rgba(10, 10, 10, 0.94)), url("data:image/png;base64,{data_bg}");
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
@@ -191,21 +200,38 @@ if os.path.exists(BACKGROUND_PATH):
 else:
     bg_css = """
     .stApp {
-        background-color: #121212;
+        background-color: #121212 !important;
     }
     """
 
 st.markdown(f"""
     <style>
         {bg_css}
-        .stExpander, div[data-testid="stVerticalBlock"] > div > div.stTextInput, div[data-testid="stSelectbox"] {{
-            background-color: rgba(25, 25, 25, 0.85);
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
+        
+        /* Forzar fondo oscuro y texto claro en contenedores, inputs y selectores */
+        .stExpander, div[data-testid="stVerticalBlock"] > div, .stTextInput input, .stSelectbox div[data-baseweb="select"] > div {{
+            background-color: #1a1a1a !important;
+            color: #ffffff !important;
+            border-radius: 8px;
         }}
-        h1, h2, h3, h4, h5, h6, p, span, label, div {{
+        
+        /* Textos generales y etiquetas perfectamente legibles */
+        h1, h2, h3, h4, h5, h6, p, span, label, div, [data-testid="stMarkdownContainer"] {{
             color: #f1f1f1 !important;
         }}
+        
+        /* Opciones de los menús desplegables (selectores) */
+        div[data-baseweb="popover"] div, div[data-baseweb="menu"] div, option {{
+            background-color: #1e1e1e !important;
+            color: #ffffff !important;
+        }}
+        
+        /* Textos dentro de campos de entrada y selección */
+        input, textarea, select, div[data-baseweb="select"] span {{
+            color: #ffffff !important;
+        }}
+        
+        /* Botones destacados */
         .stButton>button {{
             border-radius: 8px;
             font-weight: 600;
@@ -223,23 +249,31 @@ if os.path.exists(BANNER_PATH):
     st.image(BANNER_PATH, use_container_width=True)
 
 # ==========================================
-# BARRA LATERAL (Navegación y Panel Admin Exclusivo)
+# BARRA LATERAL (Navegación y Opciones)
 # ==========================================
 with st.sidebar:
     st.title("⚙️ Control POP Weppa")
+    
+    # Bloque de sesión activa visible si está logueado
+    if st.session_state.autenticado:
+        st.info(f"👤 Sesión activa:\n**{st.session_state.usuario_actual}**")
+        if st.button("🚪 Cerrar Sesión", use_container_width=True, key="btn_logout_sidebar"):
+            cerrar_sesion()
+            st.rerun()
+        st.divider()
     
     modo_vista = st.radio(
         "Navegación",
         ["📋 Solicitar Material POP (Externo)", "🔐 Panel Interno / Administración"]
     )
     
-    # Si el administrador 'adm' ya inició sesión, tiene acceso a las herramientas de configuración desde cualquier vista
+    # Herramientas del administrador 'adm' en la barra lateral
     if st.session_state.autenticado and st.session_state.usuario_actual == "adm":
         st.divider()
-        st.success("👑 Sesión de Administrador (`adm`)")
+        st.success("👑 Herramientas de Administrador")
         
         st.markdown("### 👔 Ejecutivos (Archivo TXT)")
-        st.caption("Suba un .txt con un nombre por línea para el desplegable de la solicitud.")
+        st.caption("Suba un .txt con un nombre por línea para el desplegable.")
         ejecutivos_subido = st.file_uploader("Subir TXT de Ejecutivos", type=["txt"], key="sub_ejecutivos")
         if ejecutivos_subido is not None:
             contenido_txt = ejecutivos_subido.getvalue().decode("utf-8", errors="ignore")
@@ -250,14 +284,14 @@ with st.sidebar:
 
         if os.path.exists(EJECUTIVOS_TXT_PATH):
             lista_ej_actual = obtener_lista_ejecutivos()
-            st.info(f"📋 {len(lista_ej_actual)} ejecutivos cargados.")
+            st.caption(f"📋 {len(lista_ej_actual)} ejecutivos cargados.")
             if st.button("🗑️ Eliminar TXT Ejecutivos"):
                 os.remove(EJECUTIVOS_TXT_PATH)
                 st.rerun()
 
         st.divider()
         st.markdown("### 📦 Agencias Zoom (Excel)")
-        zoom_subido = st.file_uploader("Subir Excel de Agencias Zoom", type=["xlsx", "csv"], key="sub_zoom")
+        zoom_subido = st.file_uploader("Subir Excel Agencias Zoom", type=["xlsx", "csv"], key="sub_zoom")
         if zoom_subido is not None:
             try:
                 df_z = pd.read_csv(zoom_subido) if zoom_subido.name.endswith('.csv') else pd.read_excel(zoom_subido)
@@ -300,9 +334,96 @@ with st.sidebar:
                 st.rerun()
 
 # ==========================================
-# 2. VISTA EXTERNA: SOLICITUD DE MATERIAL POP
+# 2. VISTAS Y NAVEGACIÓN PRINCIPAL
 # ==========================================
+def obtener_inventario():
+    with sqlite3.connect(DB_PATH) as conn:
+        df = pd.read_sql_query("SELECT id, producto AS 'Material', categoria AS 'Categoría', cantidad AS 'Cantidad', ubicacion AS 'Ubicación' FROM inventario", conn)
+    return df
+
+def obtener_solicitudes():
+    with sqlite3.connect(DB_PATH) as conn:
+        df = pd.read_sql_query("SELECT * FROM solicitudes_v2 ORDER BY id DESC", conn)
+    return df
+
+def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT codigo_solicitud, solicitado_por, estatus, materiales_json FROM solicitudes_v2 WHERE id = ?", (sol_id,))
+        row = cursor.fetchone()
+        if not row:
+            return
+        codigo_sol, solicitado_por, estatus_anterior, materiales_json = row[0], row[1], row[2], row[3]
+        
+        if nuevo_estatus == "Enviado" and estatus_anterior != "Enviado":
+            try:
+                mats_list = json.loads(materiales_json)
+                for item in mats_list:
+                    prod_nombre = item["Material"]
+                    cant_solicitada = int(item["Cantidad"])
+                    cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod_nombre,))
+                    inv_row = cursor.fetchone()
+                    if inv_row:
+                        stock_actual = inv_row[0]
+                        nuevo_stock = max(0, stock_actual - cant_solicitada)
+                        cursor.execute("UPDATE inventario SET cantidad = ? WHERE producto = ?", (nuevo_stock, prod_nombre))
+                    cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
+                                   (prod_nombre, "Salida Automática (Solicitud Enviada)", cant_solicitada, st.session_state.usuario_actual))
+            except Exception as e:
+                st.error(f"Error descontando inventario: {e}")
+                
+        cursor.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
+        conn.commit()
+
+    asunto_mail = f"🔄 Actualización de Estatus POP: {codigo_sol} ➔ {nuevo_estatus}"
+    cuerpo_mail = f"La solicitud {codigo_sol} de {solicitado_por} ha cambiado de estatus.\n\nNuevo Estatus: {nuevo_estatus}\nModificado por: {st.session_state.usuario_actual}"
+    enviar_correo_notificacion(asunto_mail, cuerpo_mail)
+
+def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (producto,))
+        res = cursor.fetchone()
+        if res is None:
+            if tipo == "Entrada":
+                cursor.execute("INSERT INTO inventario (producto, categoria, cantidad, ubicacion) VALUES (?, ?, ?, ?)",
+                               (producto, categoria, cantidad, ubicacion))
+            else:
+                return False, "El producto no existe en inventario."
+        else:
+            nueva_cant = res[0] + cantidad if tipo == "Entrada" else res[0] - cantidad
+            if nueva_cant < 0:
+                return False, f"Stock insuficiente. Disponible: {res[0]}."
+            cursor.execute("UPDATE inventario SET cantidad = ?, ubicacion = ? WHERE producto = ?", (nueva_cant, ubicacion, producto))
+        cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
+                       (producto, tipo, cantidad, st.session_state.usuario_actual))
+        conn.commit()
+    return True, f"¡{tipo} registrada con éxito!"
+
+def cargar_masivo(df_subido, modo):
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        if modo == "Reemplazar todo el inventario":
+            cursor.execute("DELETE FROM inventario")
+        for _, row in df_subido.iterrows():
+            prod = str(row["Material"]).strip()
+            cat = str(row.get("Categoría", "General")).strip()
+            cant = int(row["Cantidad"])
+            ubi = str(row.get("Ubicación", "Almacén Principal")).strip()
+            cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod,))
+            existe = cursor.fetchone()
+            if existe and modo == "Sumar al inventario actual":
+                cursor.execute("UPDATE inventario SET cantidad = ? WHERE producto = ?", (existe[0] + cant, prod))
+            else:
+                cursor.execute("INSERT OR REPLACE INTO inventario (producto, categoria, cantidad, ubicacion) VALUES (?, ?, ?, ?)",
+                               (prod, cat, cant, ubi))
+        conn.commit()
+
+
 if modo_vista == "📋 Solicitar Material POP (Externo)":
+    # ----------------------------------------
+    # VISTA PÚBLICA (Formulario de Solicitud)
+    # ----------------------------------------
     st.title("📋 Solicitud de Material POP — Weppa")
     st.markdown("Complete la información. Al seleccionar el **Estado** y la **Agencia**, los campos de dirección, municipio, parroquia y código se rellenarán automáticamente.")
 
@@ -345,7 +466,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     with c1:
         fecha_solicitud = st.date_input("Fecha de solicitud", value=date.today())
         
-        # 👇 DESPLEGABLE AUTOMÁTICO DE EJECUTIVOS DESDE EL ARCHIVO TXT
         lista_ejecutivos = obtener_lista_ejecutivos()
         if lista_ejecutivos:
             ejecutivo_sel = st.selectbox(
@@ -443,7 +563,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
 
     st.divider()
     st.subheader("4. Materiales solicitados")
-    st.caption("Haga clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas.")
+    st.caption("Haga clic en la celda de 'Cantidad' de cada material para desplegar las opciones numéricas (0 al 10).")
     df_mat_template = pd.DataFrame(CATALOGO_MATERIALES_BASE)
     df_mat_editado = st.data_editor(
         df_mat_template,
@@ -455,12 +575,10 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             "Material": st.column_config.TextColumn("Material"),
             "Cantidad": st.column_config.SelectboxColumn(
                 "Cantidad",
-                options=OPCIONES_CANTIDAD,
+                options=OPCIONES_CANTIDAD_SOLICITUD,
                 default=0,
                 required=True
-            ),
-            "Medidas_especificaciones": st.column_config.TextColumn("Medidas / Especificaciones"),
-            "Observaciones": st.column_config.TextColumn("Observaciones")
+            )
         }
     )
 
@@ -511,12 +629,12 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             st.rerun()
 
 else:
-    # ==========================================
-    # 3. LOGIN Y EQUIPO INTERNO
-    # ==========================================
+    # ----------------------------------------
+    # PANEL INTERNO / ADMINISTRACIÓN (Requiere Login)
+    # ----------------------------------------
     if not st.session_state.autenticado:
         st.title("🔒 Acceso Corporativo — Control POP Weppa")
-        st.info("Inicie sesión con `adm` para habilitar el panel de configuración de Ejecutivos, Zoom y Personalización Visual en la barra lateral.")
+        st.info("Inicie sesión con su cuenta corporativa autorizada para acceder al inventario y al seguimiento de solicitudes.")
         with st.form("login_form"):
             usuario = st.text_input("Correo o Usuario").strip().lower()
             clave = st.text_input("Contraseña", type="password")
@@ -530,96 +648,12 @@ else:
                     st.error("❌ Credenciales incorrectas.")
         st.stop()
 
-    def obtener_inventario():
-        with sqlite3.connect(DB_PATH) as conn:
-            df = pd.read_sql_query("SELECT id, producto AS 'Material', categoria AS 'Categoría', cantidad AS 'Cantidad', ubicacion AS 'Ubicación' FROM inventario", conn)
-        return df
-
-    def obtener_solicitudes():
-        with sqlite3.connect(DB_PATH) as conn:
-            df = pd.read_sql_query("SELECT * FROM solicitudes_v2 ORDER BY id DESC", conn)
-        return df
-
-    def actualizar_estatus_solicitud(sol_id, nuevo_estatus):
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT codigo_solicitud, solicitado_por, estatus, materiales_json FROM solicitudes_v2 WHERE id = ?", (sol_id,))
-            row = cursor.fetchone()
-            if not row:
-                return
-            codigo_sol, solicitado_por, estatus_anterior, materiales_json = row[0], row[1], row[2], row[3]
-            
-            if nuevo_estatus == "Enviado" and estatus_anterior != "Enviado":
-                try:
-                    mats_list = json.loads(materiales_json)
-                    for item in mats_list:
-                        prod_nombre = item["Material"]
-                        cant_solicitada = int(item["Cantidad"])
-                        cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod_nombre,))
-                        inv_row = cursor.fetchone()
-                        if inv_row:
-                            stock_actual = inv_row[0]
-                            nuevo_stock = max(0, stock_actual - cant_solicitada)
-                            cursor.execute("UPDATE inventario SET cantidad = ? WHERE producto = ?", (nuevo_stock, prod_nombre))
-                        cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
-                                       (prod_nombre, "Salida Automática (Solicitud Enviada)", cant_solicitada, st.session_state.usuario_actual))
-                except Exception as e:
-                    st.error(f"Error descontando inventario: {e}")
-                    
-            cursor.execute("UPDATE solicitudes_v2 SET estatus = ? WHERE id = ?", (nuevo_estatus, sol_id))
-            conn.commit()
-
-        asunto_mail = f"🔄 Actualización de Estatus POP: {codigo_sol} ➔ {nuevo_estatus}"
-        cuerpo_mail = f"La solicitud {codigo_sol} de {solicitado_por} ha cambiado de estatus.\n\nNuevo Estatus: {nuevo_estatus}\nModificado por: {st.session_state.usuario_actual}"
-        enviar_correo_notificacion(asunto_mail, cuerpo_mail)
-
-    def registrar_movimiento(producto, categoria, cantidad, tipo, ubicacion):
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (producto,))
-            res = cursor.fetchone()
-            if res is None:
-                if tipo == "Entrada":
-                    cursor.execute("INSERT INTO inventario (producto, categoria, cantidad, ubicacion) VALUES (?, ?, ?, ?)",
-                                   (producto, categoria, cantidad, ubicacion))
-                else:
-                    return False, "El producto no existe en inventario."
-            else:
-                nueva_cant = res[0] + cantidad if tipo == "Entrada" else res[0] - cantidad
-                if nueva_cant < 0:
-                    return False, f"Stock insuficiente. Disponible: {res[0]}."
-                cursor.execute("UPDATE inventario SET cantidad = ?, ubicacion = ? WHERE producto = ?", (nueva_cant, ubicacion, producto))
-            cursor.execute("INSERT INTO historial (producto, tipo_movimiento, cantidad, usuario) VALUES (?, ?, ?, ?)",
-                           (producto, tipo, cantidad, st.session_state.usuario_actual))
-            conn.commit()
-        return True, f"¡{tipo} registrada con éxito!"
-
-    def cargar_masivo(df_subido, modo):
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            if modo == "Reemplazar todo el inventario":
-                cursor.execute("DELETE FROM inventario")
-            for _, row in df_subido.iterrows():
-                prod = str(row["Material"]).strip()
-                cat = str(row.get("Categoría", "General")).strip()
-                cant = int(row["Cantidad"])
-                ubi = str(row.get("Ubicación", "Almacén Principal")).strip()
-                cursor.execute("SELECT cantidad FROM inventario WHERE producto = ?", (prod,))
-                existe = cursor.fetchone()
-                if existe and modo == "Sumar al inventario actual":
-                    cursor.execute("UPDATE inventario SET cantidad = ? WHERE producto = ?", (existe[0] + cant, prod))
-                else:
-                    cursor.execute("INSERT OR REPLACE INTO inventario (producto, categoria, cantidad, ubicacion) VALUES (?, ?, ?, ?)",
-                                   (prod, cat, cant, ubi))
-            conn.commit()
-
     col_user, col_logout = st.columns([4, 1])
     with col_user:
         st.write(f"👤 Conectado como: **{st.session_state.usuario_actual}**")
     with col_logout:
-        if st.button("Cerrar Sesión"):
-            st.session_state.autenticado = False
-            st.session_state.usuario_actual = ""
+        if st.button("🚪 Cerrar Sesión", key="btn_logout_main"):
+            cerrar_sesion()
             st.rerun()
 
     st.title("📦 Control de Material POP — Weppa (Panel Interno)")
