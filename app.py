@@ -182,7 +182,7 @@ def enviar_correo_notificacion(asunto, cuerpo):
             print(f"Error enviando correo: {e}")
 
 # ==========================================
-# ESTILOS CSS FORZADOS A MODO OSCURO TOTAL (INCLUYENDO POPOVERS Y CALENDARIOS)
+# ESTILOS CSS (MODO OSCURO + CALENDARIO CON TEXTOS NEGROS)
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -220,29 +220,47 @@ st.markdown(f"""
             color: #f1f1f1 !important;
         }}
         
-        /* Ventanas flotantes, menús desplegables y calendarios (BaseWeb popovers) */
+        /* Menús desplegables normales */
         div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], 
-        div[role="listbox"], ul[role="listbox"], div[data-baseweb="calendar"], div[data-baseweb="datepicker"] {{
+        div[role="listbox"], ul[role="listbox"] {{
             background-color: #1e1e1e !important;
             color: #ffffff !important;
         }}
-        
-        /* Opciones individuales dentro de los menús desplegables */
         div[data-baseweb="menu"] div, div[data-baseweb="popover"] div, li[role="option"], div[role="option"], span[role="option"] {{
             background-color: #1e1e1e !important;
             color: #ffffff !important;
         }}
         
-        /* Elementos del calendario de fechas */
-        div[data-baseweb="calendar"] button, div[data-baseweb="calendar"] div, div[data-baseweb="calendar"] span, div[data-baseweb="calendar"] select {{
-            color: #ffffff !important;
+        /* ==========================================
+           FORZAR CALENDARIO CON FONDO BLANCO Y LETRAS NEGRAS
+           ========================================== */
+        div[data-baseweb="calendar"], div[data-baseweb="datepicker"], div[data-baseweb="popover"] div[data-baseweb="calendar"] {{
+            background-color: #ffffff !important;
+            color: #000000 !important;
+        }}
+        
+        /* Todos los textos, números, meses y días dentro del calendario en negro */
+        div[data-baseweb="calendar"] * {{
+            color: #000000 !important;
             background-color: transparent !important;
+        }}
+        
+        /* Botones de navegación de meses (flechas) */
+        div[data-baseweb="calendar"] button {{
+            color: #000000 !important;
+            background-color: #f0f0f0 !important;
         }}
         div[data-baseweb="calendar"] button:hover {{
             background-color: #ff4b4b !important;
             color: #ffffff !important;
         }}
         
+        /* Día seleccionado en el calendario */
+        div[data-baseweb="calendar"] [aria-selected="true"] {{
+            background-color: #ff4b4b !important;
+            color: #ffffff !important;
+        }}
+
         /* Textos dentro de campos de entrada y selección */
         input, textarea, select, div[data-baseweb="select"] span {{
             color: #ffffff !important;
