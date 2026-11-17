@@ -182,7 +182,7 @@ def enviar_correo_notificacion(asunto, cuerpo):
             print(f"Error enviando correo: {e}")
 
 # ==========================================
-# ESTILOS CSS FORZADOS A MODO OSCURO TOTAL
+# ESTILOS CSS FORZADOS A MODO OSCURO TOTAL (INCLUYENDO POPOVERS Y CALENDARIOS)
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -208,21 +208,38 @@ st.markdown(f"""
     <style>
         {bg_css}
         
-        /* Forzar fondo oscuro y texto claro en contenedores, inputs y selectores */
+        /* Contenedores generales */
         .stExpander, div[data-testid="stVerticalBlock"] > div, .stTextInput input, .stSelectbox div[data-baseweb="select"] > div {{
             background-color: #1a1a1a !important;
             color: #ffffff !important;
             border-radius: 8px;
         }}
         
-        /* Textos generales y etiquetas perfectamente legibles */
+        /* Textos generales y etiquetas */
         h1, h2, h3, h4, h5, h6, p, span, label, div, [data-testid="stMarkdownContainer"] {{
             color: #f1f1f1 !important;
         }}
         
-        /* Opciones de los menús desplegables (selectores) */
-        div[data-baseweb="popover"] div, div[data-baseweb="menu"] div, option {{
+        /* Ventanas flotantes, menús desplegables y calendarios (BaseWeb popovers) */
+        div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], 
+        div[role="listbox"], ul[role="listbox"], div[data-baseweb="calendar"], div[data-baseweb="datepicker"] {{
             background-color: #1e1e1e !important;
+            color: #ffffff !important;
+        }}
+        
+        /* Opciones individuales dentro de los menús desplegables */
+        div[data-baseweb="menu"] div, div[data-baseweb="popover"] div, li[role="option"], div[role="option"], span[role="option"] {{
+            background-color: #1e1e1e !important;
+            color: #ffffff !important;
+        }}
+        
+        /* Elementos del calendario de fechas */
+        div[data-baseweb="calendar"] button, div[data-baseweb="calendar"] div, div[data-baseweb="calendar"] span, div[data-baseweb="calendar"] select {{
+            color: #ffffff !important;
+            background-color: transparent !important;
+        }}
+        div[data-baseweb="calendar"] button:hover {{
+            background-color: #ff4b4b !important;
             color: #ffffff !important;
         }}
         
@@ -254,7 +271,6 @@ if os.path.exists(BANNER_PATH):
 with st.sidebar:
     st.title("⚙️ Control POP Weppa")
     
-    # Bloque de sesión activa visible si está logueado
     if st.session_state.autenticado:
         st.info(f"👤 Sesión activa:\n**{st.session_state.usuario_actual}**")
         if st.button("🚪 Cerrar Sesión", use_container_width=True, key="btn_logout_sidebar"):
@@ -267,7 +283,6 @@ with st.sidebar:
         ["📋 Solicitar Material POP (Externo)", "🔐 Panel Interno / Administración"]
     )
     
-    # Herramientas del administrador 'adm' en la barra lateral
     if st.session_state.autenticado and st.session_state.usuario_actual == "adm":
         st.divider()
         st.success("👑 Herramientas de Administrador")
