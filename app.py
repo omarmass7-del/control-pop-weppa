@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # ==========================================
 # 0. CONFIGURACIÓN DE ACCESO Y ESTILOS
@@ -182,7 +183,7 @@ def enviar_correo_notificacion(asunto, cuerpo):
             print(f"Error enviando correo: {e}")
 
 # ==========================================
-# ESTILOS CSS (MODO OSCURO + CALENDARIO OSCURO CON LETRAS BLANCAS)
+# ESTILOS CSS + JS PARA FORZAR CALENDARIO OSCURO
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -234,29 +235,20 @@ st.markdown(f"""
         /* ==========================================
            CALENDARIO OSCURO CON LETRAS BLANCAS
            ========================================== */
-        div[data-baseweb="calendar"], div[data-baseweb="datepicker"], div[data-baseweb="popover"] div[data-baseweb="calendar"] {{
+        div[data-baseweb="calendar"], div[data-baseweb="datepicker"], div[data-baseweb="popover"] div[data-baseweb="calendar"],
+        div[data-baseweb="calendar"] *, div[data-baseweb="datepicker"] * {{
             background-color: #1a1a1a !important;
             color: #ffffff !important;
-            border: 1px solid rgba(255, 255, 255, 0.15) !important;
         }}
         
-        /* Todos los textos, números, meses y días dentro del calendario en blanco */
-        div[data-baseweb="calendar"] * {{
-            color: #ffffff !important;
-            background-color: transparent !important;
-        }}
-        
-        /* Botones de navegación de meses (flechas) */
         div[data-baseweb="calendar"] button {{
-            color: #ffffff !important;
             background-color: #2a2a2a !important;
+            color: #ffffff !important;
         }}
         div[data-baseweb="calendar"] button:hover {{
             background-color: #ff4b4b !important;
             color: #ffffff !important;
         }}
-        
-        /* Día seleccionado en el calendario */
         div[data-baseweb="calendar"] [aria-selected="true"] {{
             background-color: #ff4b4b !important;
             color: #ffffff !important;
@@ -280,6 +272,25 @@ st.markdown(f"""
         }}
     </style>
 """, unsafe_allow_html=True)
+
+# Script de inyección JS para garantizar que el calendario detecte el fondo oscuro al abrirse en celulares o PC
+components.html("""
+    <script>
+        const observer = new MutationObserver((mutations) => {
+            document.querySelectorAll('[data-baseweb="calendar"], [data-baseweb="datepicker"]').forEach(el => {
+                el.style.backgroundColor = '#1a1a1a';
+                el.style.color = '#ffffff';
+                el.querySelectorAll('*').forEach(child => {
+                    if (!child.getAttribute('aria-selected') && !child.matches('button:hover')) {
+                        child.style.color = '#ffffff';
+                        child.style.backgroundColor = 'transparent';
+                    }
+                });
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    </script>
+""", height=0)
 
 if os.path.exists(BANNER_PATH):
     st.image(BANNER_PATH, use_container_width=True)
