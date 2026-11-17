@@ -23,6 +23,7 @@ EMAILS_EQUIPO = ["angela@weppa.io", "omar@weppa.io", "maribel@weppa.io"]
 BANNER_PATH = "banner_weppa_custom.png"
 BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
+EJECUTIVOS_TXT_PATH = "ejecutivos_weppa.txt"
 
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -62,6 +63,8 @@ st.set_page_config(page_title="Control POP Weppa", page_icon="📦", layout="wid
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
+if "usuario_actual" not in st.session_state:
+    st.session_state.usuario_actual = ""
 
 # ==========================================
 # 1. BASE DE DATOS LOCAL (SQLite)
@@ -131,6 +134,19 @@ def init_db():
         """)
 
 init_db()
+
+# ==========================================
+# FUNCIÓN AUXILIAR: LEER EJECUTIVOS DESDE TXT
+# ==========================================
+def obtener_lista_ejecutivos():
+    if os.path.exists(EJECUTIVOS_TXT_PATH):
+        try:
+            with open(EJECUTIVOS_TXT_PATH, "r", encoding="utf-8", errors="ignore") as f:
+                lineas = [linea.strip() for linea in f.readlines() if linea.strip()]
+            return lineas
+        except Exception:
+            return []
+    return []
 
 # ==========================================
 # FUNCIÓN DE NOTIFICACIÓN POR CORREO (SMTP)
@@ -207,63 +223,84 @@ if os.path.exists(BANNER_PATH):
     st.image(BANNER_PATH, use_container_width=True)
 
 # ==========================================
-# BARRA LATERAL (Siempre con opciones de subida para facilidad)
+# BARRA LATERAL (Navegación y Panel Admin Exclusivo)
 # ==========================================
 with st.sidebar:
-    st.title("⚙️ Panel de Control")
+    st.title("⚙️ Control POP Weppa")
     
     modo_vista = st.radio(
         "Navegación",
-        ["📋 Solicitar Material POP (Externo)", "🔐 Iniciar Sesión (Equipo)"]
+        ["📋 Solicitar Material POP (Externo)", "🔐 Panel Interno / Administración"]
     )
     
-    st.divider()
-    st.markdown("### 🎨 Personalización Visual")
-    
-    banner_subido = st.file_uploader("Subir Banner Superior", type=["png", "jpg", "jpeg"], key="sub_banner")
-    if banner_subido is not None:
-        with open(BANNER_PATH, "wb") as f:
-            f.write(banner_subido.getbuffer())
-        st.success("¡Banner actualizado con éxito!")
-        st.rerun()
-
-    if os.path.exists(BANNER_PATH):
-        if st.button("🗑️ Eliminar Banner"):
-            os.remove(BANNER_PATH)
+    # Si el administrador 'adm' ya inició sesión, tiene acceso a las herramientas de configuración desde cualquier vista
+    if st.session_state.autenticado and st.session_state.usuario_actual == "adm":
+        st.divider()
+        st.success("👑 Sesión de Administrador (`adm`)")
+        
+        st.markdown("### 👔 Ejecutivos (Archivo TXT)")
+        st.caption("Suba un .txt con un nombre por línea para el desplegable de la solicitud.")
+        ejecutivos_subido = st.file_uploader("Subir TXT de Ejecutivos", type=["txt"], key="sub_ejecutivos")
+        if ejecutivos_subido is not None:
+            contenido_txt = ejecutivos_subido.getvalue().decode("utf-8", errors="ignore")
+            with open(EJECUTIVOS_TXT_PATH, "w", encoding="utf-8") as f:
+                f.write(contenido_txt)
+            st.success("¡Lista de ejecutivos actualizada!")
             st.rerun()
 
-    st.markdown("---")
-    bg_subido = st.file_uploader("Subir Imagen de Fondo", type=["png", "jpg", "jpeg"], key="sub_bg")
-    if bg_subido is not None:
-        with open(BACKGROUND_PATH, "wb") as f:
-            f.write(bg_subido.getbuffer())
-        st.success("¡Fondo actualizado con éxito!")
-        st.rerun()
+        if os.path.exists(EJECUTIVOS_TXT_PATH):
+            lista_ej_actual = obtener_lista_ejecutivos()
+            st.info(f"📋 {len(lista_ej_actual)} ejecutivos cargados.")
+            if st.button("🗑️ Eliminar TXT Ejecutivos"):
+                os.remove(EJECUTIVOS_TXT_PATH)
+                st.rerun()
 
-    if os.path.exists(BACKGROUND_PATH):
-        if st.button("🗑️ Eliminar Fondo"):
-            os.remove(BACKGROUND_PATH)
+        st.divider()
+        st.markdown("### 📦 Agencias Zoom (Excel)")
+        zoom_subido = st.file_uploader("Subir Excel de Agencias Zoom", type=["xlsx", "csv"], key="sub_zoom")
+        if zoom_subido is not None:
+            try:
+                df_z = pd.read_csv(zoom_subido) if zoom_subido.name.endswith('.csv') else pd.read_excel(zoom_subido)
+                df_z.to_excel(ZOOM_EXCEL_PATH, index=False)
+                st.success("¡Excel de agencias Zoom cargado!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al cargar archivo: {e}")
+
+        if os.path.exists(ZOOM_EXCEL_PATH):
+            if st.button("🗑️ Eliminar Excel Zoom"):
+                os.remove(ZOOM_EXCEL_PATH)
+                st.rerun()
+
+        st.divider()
+        st.markdown("### 🎨 Personalización Visual")
+        banner_subido = st.file_uploader("Subir Banner Superior", type=["png", "jpg", "jpeg"], key="sub_banner")
+        if banner_subido is not None:
+            with open(BANNER_PATH, "wb") as f:
+                f.write(banner_subido.getbuffer())
+            st.success("¡Banner actualizado!")
             st.rerun()
 
-    st.divider()
-    st.markdown("### 📦 Agencias Zoom (Excel)")
-    zoom_subido = st.file_uploader("Subir Excel de Agencias Zoom", type=["xlsx", "csv"], key="sub_zoom")
-    if zoom_subido is not None:
-        try:
-            df_z = pd.read_csv(zoom_subido) if zoom_subido.name.endswith('.csv') else pd.read_excel(zoom_subido)
-            df_z.to_excel(ZOOM_EXCEL_PATH, index=False)
-            st.success("¡Excel de agencias Zoom cargado con éxito!")
-            st.rerun()
-        except Exception as e:
-            st.error(f"Error al cargar archivo: {e}")
+        if os.path.exists(BANNER_PATH):
+            if st.button("🗑️ Eliminar Banner"):
+                os.remove(BANNER_PATH)
+                st.rerun()
 
-    if os.path.exists(ZOOM_EXCEL_PATH):
-        if st.button("🗑️ Eliminar Excel Zoom"):
-            os.remove(ZOOM_EXCEL_PATH)
+        st.markdown("---")
+        bg_subido = st.file_uploader("Subir Imagen de Fondo", type=["png", "jpg", "jpeg"], key="sub_bg")
+        if bg_subido is not None:
+            with open(BACKGROUND_PATH, "wb") as f:
+                f.write(bg_subido.getbuffer())
+            st.success("¡Fondo actualizado!")
             st.rerun()
+
+        if os.path.exists(BACKGROUND_PATH):
+            if st.button("🗑️ Eliminar Fondo"):
+                os.remove(BACKGROUND_PATH)
+                st.rerun()
 
 # ==========================================
-# 2. NAVEGACIÓN Y VISTAS
+# 2. VISTA EXTERNA: SOLICITUD DE MATERIAL POP
 # ==========================================
 if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.title("📋 Solicitud de Material POP — Weppa")
@@ -307,7 +344,18 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     c1, c2, c3 = st.columns(3)
     with c1:
         fecha_solicitud = st.date_input("Fecha de solicitud", value=date.today())
-        solicitado_por = st.text_input("Solicitado por *").strip()
+        
+        # 👇 DESPLEGABLE AUTOMÁTICO DE EJECUTIVOS DESDE EL ARCHIVO TXT
+        lista_ejecutivos = obtener_lista_ejecutivos()
+        if lista_ejecutivos:
+            ejecutivo_sel = st.selectbox(
+                "Solicitado por (Ejecutivo) *",
+                ["Seleccione un ejecutivo..."] + lista_ejecutivos
+            )
+            solicitado_por = "" if ejecutivo_sel == "Seleccione un ejecutivo..." else ejecutivo_sel
+        else:
+            solicitado_por = st.text_input("Solicitado por (Ejecutivo) *").strip()
+            
         cargo_departamento = st.text_input("Cargo o departamento").strip()
     with c2:
         canal_area = st.text_input("Canal o área").strip()
@@ -422,7 +470,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         estado_final = "" if estado_destino == "Seleccione un estado..." else estado_destino
 
         if not solicitado_por or not num_sol:
-            st.error("⚠️ Complete 'Solicitado por' y 'Número de contacto'.")
+            st.error("⚠️ Seleccione el 'Ejecutivo' e ingrese el 'Número de contacto'.")
         elif estado_destino == "Seleccione un estado...":
             st.error("⚠️ Seleccione un estado de destino.")
         elif cantidad_total <= 0:
@@ -468,6 +516,7 @@ else:
     # ==========================================
     if not st.session_state.autenticado:
         st.title("🔒 Acceso Corporativo — Control POP Weppa")
+        st.info("Inicie sesión con `adm` para habilitar el panel de configuración de Ejecutivos, Zoom y Personalización Visual en la barra lateral.")
         with st.form("login_form"):
             usuario = st.text_input("Correo o Usuario").strip().lower()
             clave = st.text_input("Contraseña", type="password")
@@ -564,10 +613,14 @@ else:
                                    (prod, cat, cant, ubi))
             conn.commit()
 
-    st.write(f"👤 Conectado como: **{st.session_state.usuario_actual}**")
-    if st.button("Cerrar Sesión"):
-        st.session_state.autenticado = False
-        st.rerun()
+    col_user, col_logout = st.columns([4, 1])
+    with col_user:
+        st.write(f"👤 Conectado como: **{st.session_state.usuario_actual}**")
+    with col_logout:
+        if st.button("Cerrar Sesión"):
+            st.session_state.autenticado = False
+            st.session_state.usuario_actual = ""
+            st.rerun()
 
     st.title("📦 Control de Material POP — Weppa (Panel Interno)")
 
@@ -587,7 +640,7 @@ else:
             st.divider()
             for _, row in df_sol.iterrows():
                 estatus_actual = row['estatus']
-                with st.expander(f"[{estatus_actual}] {row['codigo_solicitud']} — Solicitante: {row['solicitado_por']} | ({row['cantidad_total']} piezas)"):
+                with st.expander(f"[{estatus_actual}] {row['codigo_solicitud']} — Ejecutivo: {row['solicitado_por']} | ({row['cantidad_total']} piezas)"):
                     st.write(f"**Destino:** {row['estado_destino']}, {row['ciudad_destino']} — **Oficina:** {row['oficina_zoom']}")
                     st.write(f"**Dirección:** {row['direccion_localidad']} (Mun: {row['municipio']}, Parr: {row['parroquia']})")
                     try:
@@ -629,7 +682,7 @@ else:
                     for _, r in df_fase.iterrows():
                         with st.container():
                             st.markdown(f"**`{r['codigo_solicitud']}`**")
-                            st.write(f"👤 **Solicitante:** {r['solicitado_por']}")
+                            st.write(f"👤 **Ejecutivo:** {r['solicitado_por']}")
                             st.write(f"🏢 **Oficina:** {r['oficina_zoom']}")
                             st.write(f"📦 **Piezas:** {r['cantidad_total']}")
                             
@@ -685,5 +738,3 @@ else:
                 cargar_masivo(df_subido, modo_carga)
                 st.success("Cargado con éxito.")
                 st.rerun()
-            st.success("Cargado con éxito.")
-            st.rerun()
