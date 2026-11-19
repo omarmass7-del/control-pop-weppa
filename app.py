@@ -450,8 +450,9 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             except Exception:
                 pass
 
+    LAPSO_DIAS_ENTREGA = 5
     hoy_str = date.today().strftime("%d/%m/%Y")
-    entrega_defecto_str = (date.today() + timedelta(days=15)).strftime("%d/%m/%Y")
+    entrega_defecto_str = (date.today() + timedelta(days=LAPSO_DIAS_ENTREGA)).strftime("%d/%m/%Y")
 
     if "input_fecha_solicitud" not in st.session_state:
         st.session_state.input_fecha_solicitud = hoy_str
@@ -466,7 +467,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             st.session_state.ultima_fecha_solicitud = actual_sol
             try:
                 dt_sol = datetime.strptime(actual_sol, "%d/%m/%Y").date()
-                st.session_state.input_fecha_entrega = (dt_sol + timedelta(days=15)).strftime("%d/%m/%Y")
+                st.session_state.input_fecha_entrega = (dt_sol + timedelta(days=LAPSO_DIAS_ENTREGA)).strftime("%d/%m/%Y")
             except ValueError:
                 pass
 
@@ -491,7 +492,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             
         cargo_departamento = st.text_input("Cargo", value="Ejecutivo cuentas claves").strip()
     with c2:
-        canal_area = st.text_input("Canal o área").strip()
+        canal_area = st.text_input("Área", value="Comercial").strip()
         tipo_solicitud = st.selectbox(
             "Tipo de solicitud",
             [
@@ -503,7 +504,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         prioridad = st.selectbox("Prioridad", ["Alta", "Media", "Baja"], index=1)
     with c3:
         fecha_entrega = st.text_input(
-            "Fecha requerida de entrega (DD/MM/AAAA — +15 días)",
+            "Fecha requerida de entrega (DD/MM/AAAA — lapso 2 a 5 días)",
             key="input_fecha_entrega"
         ).strip()
         tel_c1, tel_c2 = st.columns([1, 2])
