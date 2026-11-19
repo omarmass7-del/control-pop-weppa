@@ -1,7 +1,7 @@
 import os
 import json
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -450,10 +450,34 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             except Exception:
                 pass
 
+    hoy_str = date.today().strftime("%d/%m/%Y")
+    entrega_defecto_str = (date.today() + timedelta(days=15)).strftime("%d/%m/%Y")
+
+    if "input_fecha_solicitud" not in st.session_state:
+        st.session_state.input_fecha_solicitud = hoy_str
+    if "ultima_fecha_solicitud" not in st.session_state:
+        st.session_state.ultima_fecha_solicitud = hoy_str
+    if "input_fecha_entrega" not in st.session_state:
+        st.session_state.input_fecha_entrega = entrega_defecto_str
+
+    def sincronizar_fecha_requerida():
+        actual_sol = st.session_state.get("input_fecha_solicitud", "").strip()
+        if actual_sol != st.session_state.get("ultima_fecha_solicitud"):
+            st.session_state.ultima_fecha_solicitud = actual_sol
+            try:
+                dt_sol = datetime.strptime(actual_sol, "%d/%m/%Y").date()
+                st.session_state.input_fecha_entrega = (dt_sol + timedelta(days=15)).strftime("%d/%m/%Y")
+            except ValueError:
+                pass
+
     st.subheader("1. Información general")
     c1, c2, c3 = st.columns(3)
     with c1:
-        fecha_solicitud = st.text_input("Fecha de solicitud (DD/MM/AAAA)", value=date.today().strftime("%d/%m/%Y")).strip()
+        fecha_solicitud = st.text_input(
+            "Fecha de solicitud (DD/MM/AAAA)",
+            key="input_fecha_solicitud",
+            on_change=sincronizar_fecha_requerida
+        ).strip()
         
         lista_ejecutivos = obtener_lista_ejecutivos()
         if lista_ejecutivos:
@@ -468,10 +492,20 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         cargo_departamento = st.text_input("Cargo", value="Ejecutivo cuentas claves").strip()
     with c2:
         canal_area = st.text_input("Canal o área").strip()
-        tipo_solicitud = st.selectbox("Tipo de solicitud", ["Tienda", "Evento", "Promotor(a)"])
+        tipo_solicitud = st.selectbox(
+            "Tipo de solicitud",
+            [
+                "1-Reactivación",
+                "2-Nuevo Aliado",
+                "3-Evento/Jornada/Exposición/Feria"
+            ]
+        )
         prioridad = st.selectbox("Prioridad", ["Alta", "Media", "Baja"], index=1)
     with c3:
-        fecha_entrega = st.text_input("Fecha requerida de entrega (DD/MM/AAAA)", value=date.today().strftime("%d/%m/%Y")).strip()
+        fecha_entrega = st.text_input(
+            "Fecha requerida de entrega (DD/MM/AAAA — +15 días)",
+            key="input_fecha_entrega"
+        ).strip()
         tel_c1, tel_c2 = st.columns([1, 2])
         with tel_c1:
             prefijo_sol = st.selectbox("Prefijo *", PREFIJOS_TELEFONO, key="pref_sol")
