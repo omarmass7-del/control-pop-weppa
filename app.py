@@ -1,5 +1,4 @@
-
-  import os
+import os
 import json
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -796,4 +795,4 @@ else:
                 df_subido = pd.read_csv(archivo) if archivo.name.endswith('.csv') else pd.read_excel(archivo)
                 cargar_masivo(df_subido, modo_carga)
                 st.success("Cargado con éxito.")
-                st.rerun() 
+                st.rerun()
