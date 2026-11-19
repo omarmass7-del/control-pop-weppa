@@ -1,4 +1,5 @@
-import os
+
+  import os
 import json
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -563,7 +564,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         direccion_localidad = st.text_input("Dirección o localidad", value=st.session_state.get("input_dir", "")).strip()
         municipio = st.text_input("Municipio", value=st.session_state.get("input_mun", "")).strip()
         parroquia = st.text_input("Parroquia", value=st.session_state.get("input_par", "")).strip()
-        nombre_retiro = st.text_input("Nombre de quien retirará").strip()
 
     with z3:
         ci_c1, ci_c2 = st.columns([1, 2])
@@ -579,11 +579,12 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         with tret_c2:
             num_ret = st.text_input("Teléfono retiro", placeholder="1234567").strip()
         telefono_retiro = f"{prefijo_ret}-{num_ret}" if num_ret else ""
-        correo_retiro = st.text_input("Correo electrónico (retiro)").strip()
         referencia_ubicacion = st.text_input("Referencia de ubicación").strip()
-        horario_retiro = st.text_input("Horario estimado de retiro").strip()
 
-    observaciones_entrega = st.text_area("Observaciones de entrega", height=68).strip()
+    nombre_retiro = ""
+    correo_retiro = ""
+    horario_retiro = ""
+    observaciones_entrega = ""
 
     st.divider()
     st.subheader("4. Materiales solicitados")
@@ -795,4 +796,4 @@ else:
                 df_subido = pd.read_csv(archivo) if archivo.name.endswith('.csv') else pd.read_excel(archivo)
                 cargar_masivo(df_subido, modo_carga)
                 st.success("Cargado con éxito.")
-                st.rerun()
+                st.rerun() 
