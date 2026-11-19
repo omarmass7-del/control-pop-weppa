@@ -7,7 +7,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 # ==========================================
 # 0. CONFIGURACIÓN DE ACCESO Y ESTILOS
@@ -26,10 +25,8 @@ BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 EJECUTIVOS_TXT_PATH = "ejecutivos_weppa.txt"
 
-# Opciones de 0 a 10 exclusivamente para el formulario de solicitudes POP
 OPCIONES_CANTIDAD_SOLICITUD = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-# Opciones amplias para el inventario interno del almacén
 OPCIONES_CANTIDAD = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
     25, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500,
@@ -47,7 +44,6 @@ ESTADOS_VENEZUELA = [
 
 PREFIJOS_TELEFONO = ["0412", "0414", "0424", "0416", "0426", "0212", "Otro"]
 
-# Catálogo limpio solo con ID, Material y Cantidad
 CATALOGO_MATERIALES_BASE = [
     {"Material_ID": "POP-001", "Material": "Stand", "Cantidad": 0},
     {"Material_ID": "POP-002", "Material": "Pendón grande", "Cantidad": 0},
@@ -145,9 +141,6 @@ def init_db():
 
 init_db()
 
-# ==========================================
-# FUNCIÓN AUXILIAR: LEER EJECUTIVOS DESDE TXT
-# ==========================================
 def obtener_lista_ejecutivos():
     if os.path.exists(EJECUTIVOS_TXT_PATH):
         try:
@@ -158,9 +151,6 @@ def obtener_lista_ejecutivos():
             return []
     return []
 
-# ==========================================
-# FUNCIÓN DE NOTIFICACIÓN POR CORREO (SMTP)
-# ==========================================
 def enviar_correo_notificacion(asunto, cuerpo):
     if "SMTP_USER" in st.secrets and "SMTP_PASSWORD" in st.secrets:
         try:
@@ -183,7 +173,7 @@ def enviar_correo_notificacion(asunto, cuerpo):
             print(f"Error enviando correo: {e}")
 
 # ==========================================
-# ESTILOS CSS + JS PARA FORZAR CALENDARIO OSCURO
+# ESTILOS CSS MODO OSCURO ABSOLUTO
 # ==========================================
 bg_css = ""
 if os.path.exists(BACKGROUND_PATH):
@@ -209,19 +199,16 @@ st.markdown(f"""
     <style>
         {bg_css}
         
-        /* Contenedores generales */
         .stExpander, div[data-testid="stVerticalBlock"] > div, .stTextInput input, .stSelectbox div[data-baseweb="select"] > div {{
             background-color: #1a1a1a !important;
             color: #ffffff !important;
             border-radius: 8px;
         }}
         
-        /* Textos generales y etiquetas */
         h1, h2, h3, h4, h5, h6, p, span, label, div, [data-testid="stMarkdownContainer"] {{
             color: #f1f1f1 !important;
         }}
         
-        /* Menús desplegables normales */
         div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-baseweb="menu"], 
         div[role="listbox"], ul[role="listbox"] {{
             background-color: #1e1e1e !important;
@@ -232,34 +219,10 @@ st.markdown(f"""
             color: #ffffff !important;
         }}
         
-        /* ==========================================
-           CALENDARIO OSCURO CON LETRAS BLANCAS
-           ========================================== */
-        div[data-baseweb="calendar"], div[data-baseweb="datepicker"], div[data-baseweb="popover"] div[data-baseweb="calendar"],
-        div[data-baseweb="calendar"] *, div[data-baseweb="datepicker"] * {{
-            background-color: #1a1a1a !important;
-            color: #ffffff !important;
-        }}
-        
-        div[data-baseweb="calendar"] button {{
-            background-color: #2a2a2a !important;
-            color: #ffffff !important;
-        }}
-        div[data-baseweb="calendar"] button:hover {{
-            background-color: #ff4b4b !important;
-            color: #ffffff !important;
-        }}
-        div[data-baseweb="calendar"] [aria-selected="true"] {{
-            background-color: #ff4b4b !important;
-            color: #ffffff !important;
-        }}
-
-        /* Textos dentro de campos de entrada y selección */
         input, textarea, select, div[data-baseweb="select"] span {{
             color: #ffffff !important;
         }}
         
-        /* Botones destacados */
         .stButton>button {{
             border-radius: 8px;
             font-weight: 600;
@@ -272,25 +235,6 @@ st.markdown(f"""
         }}
     </style>
 """, unsafe_allow_html=True)
-
-# Script de inyección JS para garantizar que el calendario detecte el fondo oscuro al abrirse en celulares o PC
-components.html("""
-    <script>
-        const observer = new MutationObserver((mutations) => {
-            document.querySelectorAll('[data-baseweb="calendar"], [data-baseweb="datepicker"]').forEach(el => {
-                el.style.backgroundColor = '#1a1a1a';
-                el.style.color = '#ffffff';
-                el.querySelectorAll('*').forEach(child => {
-                    if (!child.getAttribute('aria-selected') && !child.matches('button:hover')) {
-                        child.style.color = '#ffffff';
-                        child.style.backgroundColor = 'transparent';
-                    }
-                });
-            });
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-    </script>
-""", height=0)
 
 if os.path.exists(BANNER_PATH):
     st.image(BANNER_PATH, use_container_width=True)
@@ -509,7 +453,7 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.subheader("1. Información general")
     c1, c2, c3 = st.columns(3)
     with c1:
-        fecha_solicitud = st.date_input("Fecha de solicitud", value=date.today())
+        fecha_solicitud = st.text_input("Fecha de solicitud (DD/MM/AAAA)", value=date.today().strftime("%d/%m/%Y")).strip()
         
         lista_ejecutivos = obtener_lista_ejecutivos()
         if lista_ejecutivos:
@@ -521,13 +465,13 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         else:
             solicitado_por = st.text_input("Solicitado por (Ejecutivo) *").strip()
             
-        cargo_departamento = st.text_input("Cargo o departamento").strip()
+        cargo_departamento = st.text_input("Cargo", value="Ejecutivo cuentas claves").strip()
     with c2:
         canal_area = st.text_input("Canal o área").strip()
         tipo_solicitud = st.selectbox("Tipo de solicitud", ["Tienda", "Evento", "Promotor(a)"])
         prioridad = st.selectbox("Prioridad", ["Alta", "Media", "Baja"], index=1)
     with c3:
-        fecha_entrega = st.date_input("Fecha requerida de entrega", value=date.today())
+        fecha_entrega = st.text_input("Fecha requerida de entrega (DD/MM/AAAA)", value=date.today().strftime("%d/%m/%Y")).strip()
         tel_c1, tel_c2 = st.columns([1, 2])
         with tel_c1:
             prefijo_sol = st.selectbox("Prefijo *", PREFIJOS_TELEFONO, key="pref_sol")
