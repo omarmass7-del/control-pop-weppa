@@ -724,9 +724,10 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         aliado_comercial = st.text_input("Aliado comercial involucrado", key="input_aliado_comercial").strip()
         estado_sucursal = st.text_input("Estado (sucursal)", key="input_estado_sucursal").strip()
         localizacion_sucursal = st.text_input("Localización", key="input_localizacion_sucursal").strip()
-        descripcion_evento = st.text_input("Si es para un evento indique de qué se trata").strip()
-        fechas_evento = st.text_input("Fecha o fechas del evento").strip()
     with t2:
+        fecha_ev_sel = st.date_input("Fecha del evento", value=None, format="DD/MM/YYYY", key="fecha_evento_cal")
+        fechas_evento = fecha_ev_sel.strftime("%d/%m/%Y") if fecha_ev_sel else ""
+
         lista_promotores = obtener_lista_promotores()
         if lista_promotores:
             promotor_sel = st.selectbox(
@@ -736,12 +737,12 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             nombre_promotor = "" if promotor_sel == "Seleccione un promotor..." else promotor_sel
         else:
             nombre_promotor = st.text_input("Si es para un promotor indique su nombre").strip()
-        zona_cobertura = st.text_input("Zona que cubre").strip()
-        activacion_asignada = st.text_input("Evento o activación asignada").strip()
-        objetivo_solicitud = st.text_input("Objetivo de la solicitud").strip()
-        detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
 
-    zona_final = zona_cobertura or localizacion_sucursal
+        activacion_asignada = st.text_input("Evento o activación asignada").strip()
+
+    descripcion_evento = ""
+    zona_final = localizacion_sucursal
+    objetivo_solicitud = ""
     partes_detalle = []
     if estatus_sucursal:
         partes_detalle.append(f"Sucursal: {estatus_sucursal}")
@@ -749,8 +750,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         partes_detalle.append(f"Estado: {estado_sucursal}")
     if localizacion_sucursal:
         partes_detalle.append(f"Localización: {localizacion_sucursal}")
-    if detalle_adicional:
-        partes_detalle.append(detalle_adicional)
     detalle_final = " | ".join(partes_detalle)
 
     st.divider()
