@@ -25,6 +25,7 @@ BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 EJECUTIVOS_TXT_PATH = "ejecutivos_weppa.txt"
 PROMOTORES_TXT_PATH = "promotores_weppa.txt"
+SUCURSALES_PATH = "sucursales_weppa.csv"
 
 OPCIONES_CANTIDAD_SOLICITUD = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -157,6 +158,42 @@ def obtener_lista_ejecutivos():
 
 def obtener_lista_promotores():
     return obtener_lista_txt(PROMOTORES_TXT_PATH)
+
+def leer_archivo_sucursales(archivo_o_ruta):
+    if isinstance(archivo_o_ruta, str):
+        if archivo_o_ruta.endswith(".xlsx") or archivo_o_ruta.endswith(".xls"):
+            df = pd.read_excel(archivo_o_ruta)
+        else:
+            with open(archivo_o_ruta, "r", encoding="utf-8-sig", errors="replace") as f:
+                primera_linea = f.readline()
+            sep = ";" if primera_linea.count(";") >= primera_linea.count(",") else ","
+            df = pd.read_csv(archivo_o_ruta, sep=sep, encoding="utf-8-sig", engine="python", on_bad_lines="skip")
+    else:
+        nombre = getattr(archivo_o_ruta, "name", "").lower()
+        if nombre.endswith(".xlsx") or nombre.endswith(".xls"):
+            df = pd.read_excel(archivo_o_ruta)
+        else:
+            raw = archivo_o_ruta.getvalue().decode("utf-8-sig", errors="replace")
+            primera_linea = raw.splitlines()[0] if raw.splitlines() else ""
+            sep = ";" if primera_linea.count(";") >= primera_linea.count(",") else ","
+            from io import StringIO
+            df = pd.read_csv(StringIO(raw), sep=sep, engine="python", on_bad_lines="skip")
+
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+def obtener_df_sucursales():
+    if os.path.exists(SUCURSALES_PATH):
+        try:
+            df = leer_archivo_sucursales(SUCURSALES_PATH)
+            if "Sucursal" in df.columns and "Aliado" in df.columns:
+                df["Sucursal"] = df["Sucursal"].astype(str).str.strip()
+                df["Aliado"] = df["Aliado"].astype(str).str.strip()
+                df = df[(df["Sucursal"] != "") & (df["Sucursal"].str.lower() != "nan")]
+                return df
+        except Exception:
+            pass
+    return pd.DataFrame()
 
 def enviar_correo_notificacion(asunto, cuerpo):
     if "SMTP_USER" in st.secrets and "SMTP_PASSWORD" in st.secrets:
@@ -301,6 +338,29 @@ with st.sidebar:
             st.caption(f"📋 {len(lista_prom_actual)} promotores cargados.")
             if st.button("🗑️ Eliminar TXT Promotores"):
                 os.remove(PROMOTORES_TXT_PATH)
+                st.rerun()
+
+        st.divider()
+        st.markdown("### 🏪 Sucursales y Aliados (CSV / Excel)")
+        st.caption("Suba un archivo con columnas 'Sucursal' y 'Aliado' para seleccionar la tienda y autocompletar el aliado.")
+        sucursales_subido = st.file_uploader("Subir Sucursales / Aliados", type=["csv", "xlsx", "xls"], key="sub_sucursales")
+        if sucursales_subido is not None:
+            try:
+                df_suc = leer_archivo_sucursales(sucursales_subido)
+                if "Sucursal" in df_suc.columns and "Aliado" in df_suc.columns:
+                    df_suc.to_csv(SUCURSALES_PATH, sep=";", index=False, encoding="utf-8-sig")
+                    st.success("¡Lista de sucursales y aliados actualizada!")
+                    st.rerun()
+                else:
+                    st.error("El archivo debe contener las columnas 'Sucursal' y 'Aliado'.")
+            except Exception as e:
+                st.error(f"Error al cargar archivo: {e}")
+
+        if os.path.exists(SUCURSALES_PATH):
+            df_suc_actual = obtener_df_sucursales()
+            st.caption(f"📋 {len(df_suc_actual)} sucursales cargadas.")
+            if st.button("🗑️ Eliminar Sucursales"):
+                os.remove(SUCURSALES_PATH)
                 st.rerun()
 
         st.divider()
@@ -475,6 +535,18 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
             except Exception:
                 pass
 
+    df_sucursales = obtener_df_sucursales()
+
+    def sincronizar_aliado_sucursal():
+        suc_elegida = st.session_state.get("sel_nombre_tienda", "")
+        if not df_sucursales.empty and suc_elegida and suc_elegida not in ["Seleccione una tienda...", "Otra / Manual..."]:
+            fila = df_sucursales[df_sucursales["Sucursal"] == suc_elegida]
+            if not fila.empty:
+                aliado_val = str(fila.iloc[0]["Aliado"]).strip()
+                st.session_state.input_aliado_comercial = "" if aliado_val.lower() == "nan" else aliado_val
+        elif suc_elegida in ["Seleccione una tienda...", "Otra / Manual..."]:
+            st.session_state.input_aliado_comercial = ""
+
     LAPSO_DIAS_ENTREGA = 5
     hoy_str = date.today().strftime("%d/%m/%Y")
     entrega_defecto_str = (date.today() + timedelta(days=LAPSO_DIAS_ENTREGA)).strftime("%d/%m/%Y")
@@ -485,6 +557,8 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         st.session_state.ultima_fecha_solicitud = hoy_str
     if "input_fecha_entrega" not in st.session_state:
         st.session_state.input_fecha_entrega = entrega_defecto_str
+    if "input_aliado_comercial" not in st.session_state:
+        st.session_state.input_aliado_comercial = ""
 
     def sincronizar_fecha_requerida():
         actual_sol = st.session_state.get("input_fecha_solicitud", "").strip()
@@ -543,11 +617,26 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     st.subheader("2. Tienda o actividad")
     t1, t2 = st.columns(2)
     with t1:
-        nombre_tienda = st.text_input("Nombre de la tienda").strip()
+        if not df_sucursales.empty:
+            lista_sucursales = sorted(df_sucursales["Sucursal"].unique().tolist())
+            suc_sel = st.selectbox(
+                "Nombre de la tienda",
+                ["Seleccione una tienda..."] + lista_sucursales + ["Otra / Manual..."],
+                key="sel_nombre_tienda",
+                on_change=sincronizar_aliado_sucursal
+            )
+            if suc_sel == "Otra / Manual...":
+                nombre_tienda = st.text_input("Escriba el nombre de la tienda").strip()
+            elif suc_sel == "Seleccione una tienda...":
+                nombre_tienda = ""
+            else:
+                nombre_tienda = suc_sel
+        else:
+            nombre_tienda = st.text_input("Nombre de la tienda").strip()
         tienda_nueva = st.selectbox("¿Es tienda nueva?", ["No", "Sí"])
         descripcion_evento = st.text_input("Si es para un evento indique de qué se trata").strip()
         fechas_evento = st.text_input("Fecha o fechas del evento").strip()
-        aliado_comercial = st.text_input("Aliado comercial involucrado").strip()
+        aliado_comercial = st.text_input("Aliado comercial involucrado", key="input_aliado_comercial").strip()
     with t2:
         lista_promotores = obtener_lista_promotores()
         if lista_promotores:
