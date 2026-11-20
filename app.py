@@ -1,6 +1,9 @@
 import os
+import re
 import json
+import unicodedata
 import sqlite3
+from io import StringIO
 from datetime import date, datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
@@ -159,9 +162,83 @@ def obtener_lista_ejecutivos():
 def obtener_lista_promotores():
     return obtener_lista_txt(PROMOTORES_TXT_PATH)
 
+def _normalizar_texto(texto):
+    if not texto:
+        return ""
+    s = unicodedata.normalize("NFD", str(texto))
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    return re.sub(r"\s+", " ", s).strip().upper()
+
+MAPA_ESTADOS_VE = {_normalizar_texto(e): e for e in ESTADOS_VENEZUELA if e != "Seleccione un estado..."}
+MAPA_ESTADOS_VE.update({
+    "VARGAS": "La Guaira",
+    "DTTO CAPITAL": "Distrito Capital",
+    "DISTRITO FEDERAL": "Distrito Capital",
+    "CARACAS": "Distrito Capital",
+    "ANZOATEGUI": "Anzoátegui",
+    "BOLIVAR": "Bolívar",
+    "FALCON": "Falcón",
+    "GUARICO": "Guárico",
+    "MERIDA": "Mérida",
+    "NUEVA ESPARTA": "Nueva Esparta",
+    "TACHIRA": "Táchira",
+})
+
+def mapear_estado_venezuela(valor_estado):
+    limpio = _normalizar_texto(valor_estado)
+    if not limpio:
+        return ""
+    if limpio in MAPA_ESTADOS_VE:
+        return MAPA_ESTADOS_VE[limpio]
+    for clave, estado_of in MAPA_ESTADOS_VE.items():
+        if clave in limpio or limpio in clave:
+            return estado_of
+    return str(valor_estado).strip().title()
+
+def extraer_estado_de_localizacion(localizacion):
+    if not localizacion:
+        return ""
+    primer_segmento = re.split(r"[,;/\-–—]", str(localizacion))[0].strip()
+    return mapear_estado_venezuela(primer_segmento)
+
+def normalizar_df_sucursales(df):
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    mapa_cols = {}
+    for col in df.columns:
+        c_low = _normalizar_texto(col)
+        if c_low in ("SUCURSAL", "TIENDA", "NOMBRE TIENDA", "NOMBRE DE LA TIENDA"):
+            mapa_cols[col] = "Sucursal"
+        elif "ALIADO" in c_low:
+            mapa_cols[col] = "Aliado"
+        elif c_low in ("ESTADO", "ESTATUS", "ACTIVA", "ACTIVO", "STATUS"):
+            mapa_cols[col] = "Estado"
+        elif "LOCALIZACION" in c_low or "UBICACION" in c_low or "DIRECCION" in c_low:
+            mapa_cols[col] = "Localización"
+    df = df.rename(columns=mapa_cols)
+
+    if "Sucursal" not in df.columns:
+        return pd.DataFrame()
+
+    for col_req in ["Aliado", "Estado", "Localización"]:
+        if col_req not in df.columns:
+            df[col_req] = ""
+
+    df["Sucursal"] = df["Sucursal"].astype(str).str.strip()
+    df["Aliado"] = df["Aliado"].astype(str).str.strip()
+    df["Estado"] = df["Estado"].astype(str).str.strip()
+    df["Localización"] = df["Localización"].astype(str).str.strip()
+
+    for col in ["Sucursal", "Aliado", "Estado", "Localización"]:
+        df[col] = df[col].where(df[col].str.lower() != "nan", "")
+
+    df = df[df["Sucursal"] != ""].copy()
+    df["Estado_Geo"] = df["Localización"].apply(extraer_estado_de_localizacion)
+    return df[["Sucursal", "Aliado", "Estado", "Localización", "Estado_Geo"]]
+
 def leer_archivo_sucursales(archivo_o_ruta):
     if isinstance(archivo_o_ruta, str):
-        if archivo_o_ruta.endswith(".xlsx") or archivo_o_ruta.endswith(".xls"):
+        if archivo_o_ruta.lower().endswith((".xlsx", ".xls")):
             df = pd.read_excel(archivo_o_ruta)
         else:
             with open(archivo_o_ruta, "r", encoding="utf-8-sig", errors="replace") as f:
@@ -170,27 +247,19 @@ def leer_archivo_sucursales(archivo_o_ruta):
             df = pd.read_csv(archivo_o_ruta, sep=sep, encoding="utf-8-sig", engine="python", on_bad_lines="skip")
     else:
         nombre = getattr(archivo_o_ruta, "name", "").lower()
-        if nombre.endswith(".xlsx") or nombre.endswith(".xls"):
+        if nombre.endswith((".xlsx", ".xls")):
             df = pd.read_excel(archivo_o_ruta)
         else:
             raw = archivo_o_ruta.getvalue().decode("utf-8-sig", errors="replace")
             primera_linea = raw.splitlines()[0] if raw.splitlines() else ""
             sep = ";" if primera_linea.count(";") >= primera_linea.count(",") else ","
-            from io import StringIO
             df = pd.read_csv(StringIO(raw), sep=sep, engine="python", on_bad_lines="skip")
-
-    df.columns = [str(c).strip() for c in df.columns]
-    return df
+    return normalizar_df_sucursales(df)
 
 def obtener_df_sucursales():
     if os.path.exists(SUCURSALES_PATH):
         try:
-            df = leer_archivo_sucursales(SUCURSALES_PATH)
-            if "Sucursal" in df.columns and "Aliado" in df.columns:
-                df["Sucursal"] = df["Sucursal"].astype(str).str.strip()
-                df["Aliado"] = df["Aliado"].astype(str).str.strip()
-                df = df[(df["Sucursal"] != "") & (df["Sucursal"].str.lower() != "nan")]
-                return df
+            return leer_archivo_sucursales(SUCURSALES_PATH)
         except Exception:
             pass
     return pd.DataFrame()
@@ -341,18 +410,18 @@ with st.sidebar:
                 st.rerun()
 
         st.divider()
-        st.markdown("### 🏪 Sucursales y Aliados (CSV / Excel)")
-        st.caption("Suba un archivo con columnas 'Sucursal' y 'Aliado' para seleccionar la tienda y autocompletar el aliado.")
-        sucursales_subido = st.file_uploader("Subir Sucursales / Aliados", type=["csv", "xlsx", "xls"], key="sub_sucursales")
+        st.markdown("### 🏪 Sucursales (CSV / Excel)")
+        st.caption("Suba el archivo con **Sucursal**, **Aliado**, **Estado** (Activa/Inactiva) y **Localización**.")
+        sucursales_subido = st.file_uploader("Subir Archivo de Sucursales", type=["csv", "xlsx", "xls"], key="sub_sucursales")
         if sucursales_subido is not None:
             try:
                 df_suc = leer_archivo_sucursales(sucursales_subido)
-                if "Sucursal" in df_suc.columns and "Aliado" in df_suc.columns:
+                if not df_suc.empty:
                     df_suc.to_csv(SUCURSALES_PATH, sep=";", index=False, encoding="utf-8-sig")
-                    st.success("¡Lista de sucursales y aliados actualizada!")
+                    st.success("¡Base de sucursales actualizada!")
                     st.rerun()
                 else:
-                    st.error("El archivo debe contener las columnas 'Sucursal' y 'Aliado'.")
+                    st.error("El archivo debe contener al menos la columna 'Sucursal' con registros válidos.")
             except Exception as e:
                 st.error(f"Error al cargar archivo: {e}")
 
@@ -537,15 +606,33 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
 
     df_sucursales = obtener_df_sucursales()
 
-    def sincronizar_aliado_sucursal():
+    for k, v in [
+        ("input_aliado_comercial", ""),
+        ("input_estatus_sucursal", ""),
+        ("input_localizacion_sucursal", ""),
+        ("input_estado_sucursal", ""),
+    ]:
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+    def sincronizar_datos_sucursal():
         suc_elegida = st.session_state.get("sel_nombre_tienda", "")
         if not df_sucursales.empty and suc_elegida and suc_elegida not in ["Seleccione una tienda...", "Otra / Manual..."]:
             fila = df_sucursales[df_sucursales["Sucursal"] == suc_elegida]
             if not fila.empty:
-                aliado_val = str(fila.iloc[0]["Aliado"]).strip()
-                st.session_state.input_aliado_comercial = "" if aliado_val.lower() == "nan" else aliado_val
+                r = fila.iloc[0]
+                st.session_state.input_aliado_comercial = str(r.get("Aliado", "")).strip()
+                st.session_state.input_estatus_sucursal = str(r.get("Estado", "")).strip()
+                st.session_state.input_localizacion_sucursal = str(r.get("Localización", "")).strip()
+                estado_geo = str(r.get("Estado_Geo", "")).strip() or extraer_estado_de_localizacion(st.session_state.input_localizacion_sucursal)
+                st.session_state.input_estado_sucursal = estado_geo
+                if estado_geo in ESTADOS_VENEZUELA:
+                    st.session_state.sel_estado_destino = estado_geo
         elif suc_elegida in ["Seleccione una tienda...", "Otra / Manual..."]:
             st.session_state.input_aliado_comercial = ""
+            st.session_state.input_estatus_sucursal = ""
+            st.session_state.input_localizacion_sucursal = ""
+            st.session_state.input_estado_sucursal = ""
 
     LAPSO_DIAS_ENTREGA = 5
     hoy_str = date.today().strftime("%d/%m/%Y")
@@ -557,8 +644,6 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         st.session_state.ultima_fecha_solicitud = hoy_str
     if "input_fecha_entrega" not in st.session_state:
         st.session_state.input_fecha_entrega = entrega_defecto_str
-    if "input_aliado_comercial" not in st.session_state:
-        st.session_state.input_aliado_comercial = ""
 
     def sincronizar_fecha_requerida():
         actual_sol = st.session_state.get("input_fecha_solicitud", "").strip()
@@ -618,12 +703,12 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     t1, t2 = st.columns(2)
     with t1:
         if not df_sucursales.empty:
-            lista_sucursales = sorted(df_sucursales["Sucursal"].unique().tolist())
+            lista_sucursales = df_sucursales["Sucursal"].unique().tolist()
             suc_sel = st.selectbox(
-                "Nombre de la tienda",
+                "Nombre de la tienda (Sucursal)",
                 ["Seleccione una tienda..."] + lista_sucursales + ["Otra / Manual..."],
                 key="sel_nombre_tienda",
-                on_change=sincronizar_aliado_sucursal
+                on_change=sincronizar_datos_sucursal
             )
             if suc_sel == "Otra / Manual...":
                 nombre_tienda = st.text_input("Escriba el nombre de la tienda").strip()
@@ -633,10 +718,14 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
                 nombre_tienda = suc_sel
         else:
             nombre_tienda = st.text_input("Nombre de la tienda").strip()
+
         tienda_nueva = st.selectbox("¿Es tienda nueva?", ["No", "Sí"])
+        estatus_sucursal = st.text_input("Estatus de la sucursal (Activa / Inactiva)", key="input_estatus_sucursal").strip()
+        aliado_comercial = st.text_input("Aliado comercial involucrado", key="input_aliado_comercial").strip()
+        estado_sucursal = st.text_input("Estado (sucursal)", key="input_estado_sucursal").strip()
+        localizacion_sucursal = st.text_input("Localización", key="input_localizacion_sucursal").strip()
         descripcion_evento = st.text_input("Si es para un evento indique de qué se trata").strip()
         fechas_evento = st.text_input("Fecha o fechas del evento").strip()
-        aliado_comercial = st.text_input("Aliado comercial involucrado", key="input_aliado_comercial").strip()
     with t2:
         lista_promotores = obtener_lista_promotores()
         if lista_promotores:
@@ -651,6 +740,18 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         activacion_asignada = st.text_input("Evento o activación asignada").strip()
         objetivo_solicitud = st.text_input("Objetivo de la solicitud").strip()
         detalle_adicional = st.text_area("Detalle adicional relevante", height=68).strip()
+
+    zona_final = zona_cobertura or localizacion_sucursal
+    partes_detalle = []
+    if estatus_sucursal:
+        partes_detalle.append(f"Sucursal: {estatus_sucursal}")
+    if estado_sucursal:
+        partes_detalle.append(f"Estado: {estado_sucursal}")
+    if localizacion_sucursal:
+        partes_detalle.append(f"Localización: {localizacion_sucursal}")
+    if detalle_adicional:
+        partes_detalle.append(detalle_adicional)
+    detalle_final = " | ".join(partes_detalle)
 
     st.divider()
     st.subheader("3. Envío por Zoom (Autocompletado Automático)")
@@ -759,8 +860,8 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
                     codigo_sol, str(fecha_solicitud), solicitado_por, cargo_departamento,
                     canal_area, tipo_solicitud, prioridad, str(fecha_entrega), contacto_solicitante,
                     nombre_tienda, tienda_nueva, descripcion_evento, fechas_evento,
-                    aliado_comercial, nombre_promotor, zona_cobertura, activacion_asignada,
-                    objetivo_solicitud, detalle_adicional, estado_final, ciudad_destino,
+                    aliado_comercial, nombre_promotor, zona_final, activacion_asignada,
+                    objetivo_solicitud, detalle_final, estado_final, ciudad_destino,
                     oficina_zoom, direccion_localidad, municipio, parroquia, nombre_retiro,
                     cedula_retiro, telefono_retiro, correo_retiro, referencia_ubicacion,
                     horario_retiro, observaciones_entrega, cantidad_total, materiales_json, "Recepción de Documento"
