@@ -24,6 +24,7 @@ BANNER_PATH = "banner_weppa_custom.png"
 BACKGROUND_PATH = "background_weppa_custom.png"
 ZOOM_EXCEL_PATH = "agencias_zoom_personalizadas.xlsx"
 EJECUTIVOS_TXT_PATH = "ejecutivos_weppa.txt"
+PROMOTORES_TXT_PATH = "promotores_weppa.txt"
 
 OPCIONES_CANTIDAD_SOLICITUD = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -141,15 +142,21 @@ def init_db():
 
 init_db()
 
-def obtener_lista_ejecutivos():
-    if os.path.exists(EJECUTIVOS_TXT_PATH):
+def obtener_lista_txt(ruta_archivo):
+    if os.path.exists(ruta_archivo):
         try:
-            with open(EJECUTIVOS_TXT_PATH, "r", encoding="utf-8", errors="ignore") as f:
+            with open(ruta_archivo, "r", encoding="utf-8", errors="ignore") as f:
                 lineas = [linea.strip() for linea in f.readlines() if linea.strip()]
             return lineas
         except Exception:
             return []
     return []
+
+def obtener_lista_ejecutivos():
+    return obtener_lista_txt(EJECUTIVOS_TXT_PATH)
+
+def obtener_lista_promotores():
+    return obtener_lista_txt(PROMOTORES_TXT_PATH)
 
 def enviar_correo_notificacion(asunto, cuerpo):
     if "SMTP_USER" in st.secrets and "SMTP_PASSWORD" in st.secrets:
@@ -276,6 +283,24 @@ with st.sidebar:
             st.caption(f"📋 {len(lista_ej_actual)} ejecutivos cargados.")
             if st.button("🗑️ Eliminar TXT Ejecutivos"):
                 os.remove(EJECUTIVOS_TXT_PATH)
+                st.rerun()
+
+        st.divider()
+        st.markdown("### 📣 Promotores (Archivo TXT)")
+        st.caption("Suba un .txt con un nombre por línea para desplegar en la solicitud.")
+        promotores_subido = st.file_uploader("Subir TXT de Promotores", type=["txt"], key="sub_promotores")
+        if promotores_subido is not None:
+            contenido_prom_txt = promotores_subido.getvalue().decode("utf-8", errors="ignore")
+            with open(PROMOTORES_TXT_PATH, "w", encoding="utf-8") as f:
+                f.write(contenido_prom_txt)
+            st.success("¡Lista de promotores actualizada!")
+            st.rerun()
+
+        if os.path.exists(PROMOTORES_TXT_PATH):
+            lista_prom_actual = obtener_lista_promotores()
+            st.caption(f"📋 {len(lista_prom_actual)} promotores cargados.")
+            if st.button("🗑️ Eliminar TXT Promotores"):
+                os.remove(PROMOTORES_TXT_PATH)
                 st.rerun()
 
         st.divider()
@@ -524,7 +549,15 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         fechas_evento = st.text_input("Fecha o fechas del evento").strip()
         aliado_comercial = st.text_input("Aliado comercial involucrado").strip()
     with t2:
-        nombre_promotor = st.text_input("Si es para un promotor indique su nombre").strip()
+        lista_promotores = obtener_lista_promotores()
+        if lista_promotores:
+            promotor_sel = st.selectbox(
+                "Si es para un promotor indique su nombre",
+                ["Seleccione un promotor..."] + lista_promotores
+            )
+            nombre_promotor = "" if promotor_sel == "Seleccione un promotor..." else promotor_sel
+        else:
+            nombre_promotor = st.text_input("Si es para un promotor indique su nombre").strip()
         zona_cobertura = st.text_input("Zona que cubre").strip()
         activacion_asignada = st.text_input("Evento o activación asignada").strip()
         objetivo_solicitud = st.text_input("Objetivo de la solicitud").strip()
