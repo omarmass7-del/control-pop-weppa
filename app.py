@@ -193,7 +193,7 @@ def mapear_estado_venezuela(valor_estado):
     for clave, estado_of in MAPA_ESTADOS_VE.items():
         if clave in limpio or limpio in clave:
             return estado_of
-    return str(valor_estado).strip().title()
+    return ""
 
 def extraer_estado_de_localizacion(localizacion):
     if not localizacion:
@@ -233,7 +233,14 @@ def normalizar_df_sucursales(df):
         df[col] = df[col].where(df[col].str.lower() != "nan", "")
 
     df = df[df["Sucursal"] != ""].copy()
-    df["Estado_Geo"] = df["Localización"].apply(extraer_estado_de_localizacion)
+
+    def resolver_estado_fila(row):
+        est_dir = mapear_estado_venezuela(row["Estado"])
+        if est_dir:
+            return est_dir
+        return extraer_estado_de_localizacion(row["Localización"])
+
+    df["Estado_Geo"] = df.apply(resolver_estado_fila, axis=1)
     return df[["Sucursal", "Aliado", "Estado", "Localización", "Estado_Geo"]]
 
 def leer_archivo_sucursales(archivo_o_ruta):
@@ -610,29 +617,41 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         ("input_aliado_comercial", ""),
         ("input_estatus_sucursal", ""),
         ("input_localizacion_sucursal", ""),
-        ("input_estado_sucursal", ""),
     ]:
         if k not in st.session_state:
             st.session_state[k] = v
 
+    def limpiar_datos_sucursal():
+        st.session_state.input_aliado_comercial = ""
+        st.session_state.input_estatus_sucursal = ""
+        st.session_state.input_localizacion_sucursal = ""
+
+    def sincronizar_estado_tienda():
+        est_elegido = st.session_state.get("sel_estado_tienda", "Seleccione un estado...")
+        if est_elegido and est_elegido != "Seleccione un estado...":
+            st.session_state.sel_estado_destino = est_elegido
+        st.session_state.sel_nombre_tienda = "Seleccione una tienda..."
+        limpiar_datos_sucursal()
+
     def sincronizar_datos_sucursal():
         suc_elegida = st.session_state.get("sel_nombre_tienda", "")
+        est_elegido = st.session_state.get("sel_estado_tienda", "Seleccione un estado...")
         if not df_sucursales.empty and suc_elegida and suc_elegida not in ["Seleccione una tienda...", "Otra / Manual..."]:
-            fila = df_sucursales[df_sucursales["Sucursal"] == suc_elegida]
+            df_base = df_sucursales
+            if est_elegido and est_elegido != "Seleccione un estado...":
+                df_est = df_sucursales[df_sucursales["Estado_Geo"] == est_elegido]
+                if not df_est.empty:
+                    df_base = df_est
+            fila = df_base[df_base["Sucursal"] == suc_elegida]
+            if fila.empty:
+                fila = df_sucursales[df_sucursales["Sucursal"] == suc_elegida]
             if not fila.empty:
                 r = fila.iloc[0]
                 st.session_state.input_aliado_comercial = str(r.get("Aliado", "")).strip()
                 st.session_state.input_estatus_sucursal = str(r.get("Estado", "")).strip()
                 st.session_state.input_localizacion_sucursal = str(r.get("Localización", "")).strip()
-                estado_geo = str(r.get("Estado_Geo", "")).strip() or extraer_estado_de_localizacion(st.session_state.input_localizacion_sucursal)
-                st.session_state.input_estado_sucursal = estado_geo
-                if estado_geo in ESTADOS_VENEZUELA:
-                    st.session_state.sel_estado_destino = estado_geo
         elif suc_elegida in ["Seleccione una tienda...", "Otra / Manual..."]:
-            st.session_state.input_aliado_comercial = ""
-            st.session_state.input_estatus_sucursal = ""
-            st.session_state.input_localizacion_sucursal = ""
-            st.session_state.input_estado_sucursal = ""
+            limpiar_datos_sucursal()
 
     LAPSO_DIAS_ENTREGA = 5
     hoy_str = date.today().strftime("%d/%m/%Y")
@@ -700,10 +719,31 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
 
     st.divider()
     st.subheader("2. Tienda o actividad")
+
+    estados_disponibles_suc = []
+    if not df_sucursales.empty:
+        estados_disponibles_suc = sorted([e for e in df_sucursales["Estado_Geo"].unique().tolist() if e])
+
+    opciones_estado_tienda = ["Seleccione un estado..."] + (estados_disponibles_suc if estados_disponibles_suc else ESTADOS_VENEZUELA[1:])
+
     t1, t2 = st.columns(2)
     with t1:
+        estado_tienda = st.selectbox(
+            "Estado",
+            opciones_estado_tienda,
+            key="sel_estado_tienda",
+            on_change=sincronizar_estado_tienda
+        )
+
         if not df_sucursales.empty:
-            lista_sucursales = df_sucursales["Sucursal"].unique().tolist()
+            if estado_tienda and estado_tienda != "Seleccione un estado...":
+                df_fil_suc = df_sucursales[df_sucursales["Estado_Geo"] == estado_tienda]
+                if df_fil_suc.empty:
+                    df_fil_suc = df_sucursales
+            else:
+                df_fil_suc = df_sucursales
+
+            lista_sucursales = sorted(df_fil_suc["Sucursal"].unique().tolist())
             suc_sel = st.selectbox(
                 "Nombre de la tienda (Sucursal)",
                 ["Seleccione una tienda..."] + lista_sucursales + ["Otra / Manual..."],
@@ -719,15 +759,11 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         else:
             nombre_tienda = st.text_input("Nombre de la tienda").strip()
 
-        tienda_nueva = st.selectbox("¿Es tienda nueva?", ["No", "Sí"])
-        estatus_sucursal = st.text_input("Estatus de la sucursal (Activa / Inactiva)", key="input_estatus_sucursal").strip()
         aliado_comercial = st.text_input("Aliado comercial involucrado", key="input_aliado_comercial").strip()
-        estado_sucursal = st.text_input("Estado (sucursal)", key="input_estado_sucursal").strip()
+        estatus_sucursal = st.text_input("¿Está activa? (Activa / Inactiva)", key="input_estatus_sucursal").strip()
         localizacion_sucursal = st.text_input("Localización", key="input_localizacion_sucursal").strip()
+        tienda_nueva = st.selectbox("¿Es tienda nueva?", ["No", "Sí"])
     with t2:
-        fecha_ev_sel = st.date_input("Fecha del evento", value=None, format="DD/MM/YYYY", key="fecha_evento_cal")
-        fechas_evento = fecha_ev_sel.strftime("%d/%m/%Y") if fecha_ev_sel else ""
-
         lista_promotores = obtener_lista_promotores()
         if lista_promotores:
             promotor_sel = st.selectbox(
@@ -738,7 +774,9 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
         else:
             nombre_promotor = st.text_input("Si es para un promotor indique su nombre").strip()
 
-        activacion_asignada = st.text_input("Evento o activación asignada").strip()
+        activacion_asignada = st.text_input("Si es evento / activación indique cuál").strip()
+        fecha_ev_sel = st.date_input("Fecha del evento / activación", value=None, format="DD/MM/YYYY", key="fecha_evento_cal")
+        fechas_evento = fecha_ev_sel.strftime("%d/%m/%Y") if fecha_ev_sel else ""
 
     descripcion_evento = ""
     zona_final = localizacion_sucursal
@@ -746,8 +784,8 @@ if modo_vista == "📋 Solicitar Material POP (Externo)":
     partes_detalle = []
     if estatus_sucursal:
         partes_detalle.append(f"Sucursal: {estatus_sucursal}")
-    if estado_sucursal:
-        partes_detalle.append(f"Estado: {estado_sucursal}")
+    if estado_tienda and estado_tienda != "Seleccione un estado...":
+        partes_detalle.append(f"Estado: {estado_tienda}")
     if localizacion_sucursal:
         partes_detalle.append(f"Localización: {localizacion_sucursal}")
     detalle_final = " | ".join(partes_detalle)
